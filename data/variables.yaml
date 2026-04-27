@@ -1,0 +1,160 @@
+# Authoritative variable manifest. Feeds the Open-Meteo request and DICTIONARY.md.
+# Units follow Open-Meteo defaults (SI, Celsius, mm, m/s, degrees, W/m^2).
+source: open_meteo_era5
+endpoint: https://archive-api.open-meteo.com/v1/archive
+reanalysis: ERA5 (with ERA5T for the most recent ~5 days)
+grid_resolution_km: ~10
+temporal_resolution: hourly
+
+hourly_variables:
+  # Temperature & humidity
+  - name: temperature_2m
+    unit: "°C"
+    description: Air temperature at 2 m above ground
+    axis: temp
+  - name: apparent_temperature
+    unit: "°C"
+    description: Perceived feels-like temperature (wind chill / heat index blend)
+    axis: temp
+  - name: dew_point_2m
+    unit: "°C"
+    description: Dew point at 2 m — moisture content
+    axis: temp
+  - name: relative_humidity_2m
+    unit: "%"
+    description: Relative humidity at 2 m
+    axis: temp
+
+  # Precipitation
+  - name: precipitation
+    unit: "mm"
+    description: Total precipitation (rain + snow water equivalent) for the preceding hour
+    axis: rain
+  - name: rain
+    unit: "mm"
+    description: Liquid rainfall for the preceding hour
+    axis: rain
+  - name: snowfall
+    unit: "cm"
+    description: Snowfall for the preceding hour
+    axis: rain
+  - name: snow_depth
+    unit: "m"
+    description: Snow depth on the ground
+    axis: rain
+
+  # Pressure
+  - name: pressure_msl
+    unit: "hPa"
+    description: Mean-sea-level pressure
+    axis: other
+  - name: surface_pressure
+    unit: "hPa"
+    description: Surface pressure
+    axis: other
+
+  # Clouds & sun
+  - name: cloud_cover
+    unit: "%"
+    description: Total cloud cover
+    axis: sun
+  - name: cloud_cover_low
+    unit: "%"
+    description: Low-altitude cloud cover (< 3 km)
+    axis: sun
+  - name: cloud_cover_mid
+    unit: "%"
+    description: Mid-altitude cloud cover (3–8 km)
+    axis: sun
+  - name: cloud_cover_high
+    unit: "%"
+    description: High-altitude cloud cover (> 8 km)
+    axis: sun
+  - name: shortwave_radiation
+    unit: "W/m²"
+    description: Global horizontal irradiance — total solar energy reaching surface
+    axis: sun
+  - name: direct_radiation
+    unit: "W/m²"
+    description: Direct beam solar irradiance on horizontal surface
+    axis: sun
+  - name: diffuse_radiation
+    unit: "W/m²"
+    description: Diffuse (scattered) solar irradiance
+    axis: sun
+  - name: direct_normal_irradiance
+    unit: "W/m²"
+    description: Direct beam solar irradiance on a surface normal to the sun
+    axis: sun
+  - name: sunshine_duration
+    unit: "s"
+    description: Seconds of sunshine within the hour (direct radiation ≥ 120 W/m²)
+    axis: sun
+
+  # Wind
+  - name: wind_speed_10m
+    unit: "m/s"
+    description: Wind speed at 10 m
+    axis: wind
+  - name: wind_speed_100m
+    unit: "m/s"
+    description: Wind speed at 100 m (upper boundary layer)
+    axis: wind
+  - name: wind_direction_10m
+    unit: "°"
+    description: Wind direction at 10 m (meteorological convention, 0° = from north)
+    axis: wind
+  - name: wind_direction_100m
+    unit: "°"
+    description: Wind direction at 100 m
+    axis: wind
+  - name: wind_gusts_10m
+    unit: "m/s"
+    description: Maximum wind gust at 10 m during the hour
+    axis: wind
+
+  # Evapotranspiration & deficit (useful for dryness)
+  - name: et0_fao_evapotranspiration
+    unit: "mm"
+    description: FAO reference evapotranspiration — proxy for atmospheric drying power
+    axis: other
+  - name: vapour_pressure_deficit
+    unit: "kPa"
+    description: Vapour pressure deficit — how "thirsty" the air is
+    axis: other
+
+  # Coded state
+  - name: weather_code
+    unit: "WMO"
+    description: WMO weather code (0 clear, 1-3 partly cloudy, 45/48 fog, 51-67 rain, 71-77 snow, 80-82 showers, 95-99 thunderstorms)
+    axis: other
+  - name: is_day
+    unit: "0/1"
+    description: Daylight flag (1 = sun above horizon)
+    axis: sun
+
+derived_variables:
+  # Computed in etl/curate.py
+  - name: uv_index_est
+    unit: "index"
+    description: |
+      Estimated UV index derived from shortwave_radiation and solar geometry.
+      Approximation: uv_index ≈ clip((direct_normal_irradiance / 1000) * sin(altitude) * clear_sky_factor * 11, 0, 14).
+      ERA5 does not publish UV; this is a best-effort proxy — revisit with OpenUV or NOAA Brewer data if we need higher fidelity.
+    axis: uv
+  - name: ts_local
+    unit: "timestamp"
+    description: Local time (America/Los_Angeles) derived from ts_utc
+    axis: meta
+  - name: hour_of_day
+    unit: "0-23"
+    description: Local hour, from ts_local
+    axis: meta
+  - name: month
+    unit: "1-12"
+    description: Local calendar month
+    axis: meta
+  - name: dow
+    unit: "0-6"
+    description: Day of week (Mon=0)
+    axis: meta

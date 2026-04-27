@@ -1,0 +1,30 @@
+[project]
+name = "weather-compare"
+version = "0.1.0"
+description = "Santa Clara, CA vs Eastside King, WA — hourly weather comparison dashboard"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27",
+    "pandas>=2.2",
+    "pyarrow>=16",
+    "duckdb>=1.0",
+    "pyyaml>=6.0",
+    "tenacity>=9.0",
+    "tqdm>=4.66",
+    "fastapi>=0.136.0",
+    "uvicorn[standard]>=0.44.0",
+]
+
+[dependency-groups]
+dev = [
+    "jupyterlab>=4.2",
+    "ipykernel>=6.29",
+    "matplotlib>=3.9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["etl", "classifier"]

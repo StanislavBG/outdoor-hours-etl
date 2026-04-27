@@ -1,0 +1,42 @@
+{
+  "santa_clara_ca": {
+    "best_time": "October and November shine with 85\u201395% good daytime hours, mild peaks near 26\u201334\u00b0C, dry skies, and gentler UV.",
+    "strengths": "Reliably dry, sunny daytime conditions nearly year-round, plus mild winters that keep good outdoor hours above 88% from November through January.",
+    "watch_out": "July through September brings extreme UV near 11, peaks pushing 35\u201337\u00b0C, and the lowest share of good daytime hours, around 53\u201363%."
+  },
+  "eastside_king_wa": {
+    "best_time": "May through September deliver 76\u201390% good daytime hours with mild peaks in the mid-20s\u00b0C and notably dry mid-summer.",
+    "strengths": "Exceptionally dry Julys (just 22mm rain) and a long sunny stretch from May through October make outdoor planning reliable.",
+    "watch_out": "December through February are rough, with only 28\u201334% good hours, cold 4\u00b0C averages, and 146\u2013203mm of relentless rain."
+  },
+  "san_francisco_ca": {
+    "best_time": "September and October shine with warm peaks near 30\u00b0C, mild averages, minimal rain, and moderate UV\u2014ideal for outdoor plans.",
+    "strengths": "San Francisco delivers remarkably consistent mild temperatures year-round and exceptionally high 'good hours' percentages in fall and late autumn.",
+    "watch_out": "December and January bring the heaviest rain (118\u2013133mm) and shortest, coolest days, making that stretch the soggiest for outdoor activity."
+  },
+  "snohomish_wa": {
+    "best_time": "May through September deliver 76\u201391% good daytime hours with mild peaks near 25\u201331\u00b0C and dry stretches, especially July's 19mm rainfall.",
+    "strengths": "Exceptionally dry, sunny late summer with September hitting 91% good daytime hours and moderate UV keeping outdoor sessions comfortable.",
+    "watch_out": "November through January is brutal, with 26\u201330% good hours, relentless 162\u2013186mm monthly rain, chilly 4\u00b0C averages, and barely any UV."
+  },
+  "charlotte_fl": {
+    "best_time": "December through February deliver 95\u201398% good daytime hours with mild 17\u201320\u00b0C averages, low UV, and the year's lightest rainfall.",
+    "strengths": "Charlotte County stacks an exceptionally long sunny winter with warm peaks near 28\u201330\u00b0C, giving more comfortable outdoor hours than most counties.",
+    "watch_out": "June through September brings 190\u2013243mm monthly rain, 28\u00b0C humidity, and UV above 10, cutting good daytime hours to just 54\u201359%."
+  },
+  "albemarle_va": {
+    "best_time": "April through October shine, with October offering 89% good daytime hours and May close behind at 80%.",
+    "strengths": "Remarkably consistent spring and fall outdoor windows, plus a standout October that beats most counties for reliable dry, mild daylight.",
+    "watch_out": "July brings the worst stretch as peaks hit 37\u00b0C with UV near 11 and only half the daytime rated good."
+  },
+  "westchester_ny": {
+    "best_time": "May through October shine, with October delivering 91% good daytime hours and September close behind at 85% \u2014 crisp, comfortable, and dry enough.",
+    "strengths": "Westchester stacks a long outdoor season from April to October and an unusually pleasant autumn, with mild temps and low UV well into fall.",
+    "watch_out": "December through February is the rough stretch \u2014 barely 13\u201321% good daytime hours, freezing averages, and steady rain or snow shutting outdoor plans down."
+  },
+  "maui_hi": {
+    "best_time": "November through January deliver the highest share of good daytime hours with mild temps, gentle UV, and manageable rain.",
+    "strengths": "Year-round warmth and a remarkably high share of good outdoor hours, topping 87% of daytime in late fall and winter.",
+    "watch_out": "August is the roughest stretch, with only 65% good daytime hours, peak UV near 11.7, and lingering summer heat."
+  }
+}
