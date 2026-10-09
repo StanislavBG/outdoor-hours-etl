@@ -50,3 +50,7 @@
 - **Live site:** `bilko.run/outdoor-hours/last1m.json` showed the new pubdate after ~4 polls (~2 min).
 - **Curated (hourly_last10y)** per region: 2016-04-19/20 → 2026-10-04/05, 11 calendar years each (12 regions).
 - **Health:** `etl.health` HEALTHY, exit 0.
+
+## 2026-10-09 (3:00 PM PDT) — re-verification (job 08 final pass)
+
+Nothing re-run; pipeline state re-checked in /home/bilko/Projects/Weather: `etl.sync --check` -> `no gaps` (rc 0); `crontab -l` has exactly one `weather-weekly-refresh` line; `last_status.json` ok=true published=true (2:47 PM PDT); `etl.health` HEALTHY; https://bilko.run/outdoor-hours/last1m.json pubdate `2026-10-09T21:45:42+00:00` (matches Bilko publish commit `2776c53`; Bilko HEAD has since advanced with unrelated commits). Stray empty file `<path>` remains untracked in the live checkout root (harmless).
