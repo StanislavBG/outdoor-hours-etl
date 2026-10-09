@@ -22,69 +22,20 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-ROOT = Path(__file__).resolve().parents[1]
-CURATED = ROOT / "data" / "curated"
+from app import data
+from app.data import available_tags, load_rollup, series_payload, validate_tag
+from etl.catalog import METRICS
+from etl.points import REGIONS as REGION_REGISTRY
+
 STATIC = Path(__file__).parent / "static"
 
 app = FastAPI(title="Weather Compare")
 app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
 
 
-# ---------------------------------------------------------------------------
-# Metric catalog
-# ---------------------------------------------------------------------------
-
-# key = column name in the grain parquet.
-# Each entry declares which grains support it, the UI label, and the axis/unit.
-# Sum-style metrics (stay_outside_hours, precipitation_sum, sunshine_hours) only make
-# sense per grain — e.g. "sum of stay-outside hours in a day/month/year".
-# Mean-style metrics are meaningful at any grain.
-METRICS: list[dict] = [
-    {"key": "stay_outside_hours",   "label": "Good-for-outdoors hours",        "unit": "hours",  "kind": "sum"},
-    {"key": "pct_daytime_outside",  "label": "% of daylight that's comfortable", "unit": "%",    "kind": "pct"},
-    {"key": "temperature_2m_mean",  "label": "Average temperature",            "unit": "°C",     "kind": "mean"},
-    {"key": "temperature_2m_max",   "label": "Hottest point",                  "unit": "°C",     "kind": "max"},
-    {"key": "apparent_temperature_mean", "label": "Average feels-like temperature", "unit": "°C", "kind": "mean"},
-    {"key": "uv_index_est_mean",    "label": "Average UV",                     "unit": "UV",     "kind": "mean"},
-    {"key": "uv_index_est_max",     "label": "Strongest UV",                   "unit": "UV",     "kind": "max"},
-    {"key": "cloud_cover_mean",     "label": "Cloudiness",                     "unit": "%",      "kind": "mean"},
-    {"key": "precipitation_sum",    "label": "Total rain",                     "unit": "mm",     "kind": "sum"},
-    {"key": "wind_speed_10m_mean",  "label": "Average wind",                   "unit": "m/s",    "kind": "mean"},
-    {"key": "wind_gusts_10m_max",   "label": "Strongest gust",                 "unit": "m/s",    "kind": "max"},
-    {"key": "sunshine_hours",       "label": "Sunshine hours",                 "unit": "hours",  "kind": "sum"},
-    {"key": "relative_humidity_2m_mean", "label": "Humidity",                  "unit": "%",      "kind": "mean"},
-    {"key": "pressure_msl_mean",    "label": "Air pressure",                   "unit": "hPa",    "kind": "mean"},
-]
-_METRIC_KEYS = {m["key"] for m in METRICS}
-
-from etl.points import REGIONS as REGION_REGISTRY  # noqa: E402
 
 REGION_LABEL = {k: v["label"] for k, v in REGION_REGISTRY.items()}
 REGION_ORDER = list(REGION_REGISTRY.keys())
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _available_tags() -> list[str]:
-    """Find tags for which the region_daily parquet exists (minimum needed for dashboard)."""
-    tags = sorted({
-        p.stem.removeprefix("region_daily_")
-        for p in CURATED.glob("region_daily_*.parquet")
-    })
-    return tags
-
-
-def _load(tag: str, grain: Literal["daily", "monthly", "yearly"]) -> pd.DataFrame:
-    path = CURATED / f"region_{grain}_{tag}.parquet"
-    if not path.exists():
-        raise HTTPException(404, f"no {grain} rollup for tag={tag}")
-    return pd.read_parquet(path)
-
-
-def _x_column(grain: str) -> str:
-    return {"daily": "local_date", "monthly": "month_start", "yearly": "year"}[grain]
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +49,7 @@ def index() -> FileResponse:
 
 @app.get("/api/tags")
 def tags() -> JSONResponse:
-    return JSONResponse({"tags": _available_tags()})
+    return JSONResponse({"tags": available_tags()})
 
 
 @app.get("/api/metrics")
@@ -117,39 +68,7 @@ def series(
     grain: Literal["daily", "monthly", "yearly"] = Query("daily"),
     metric: str = Query("stay_outside_hours"),
 ) -> JSONResponse:
-    if metric not in _METRIC_KEYS:
-        raise HTTPException(400, f"unknown metric: {metric}")
-
-    df = _load(tag, grain)
-    if metric not in df.columns:
-        raise HTTPException(404, f"metric {metric} not present in {grain}_{tag}")
-
-    x = _x_column(grain)
-    series_out: dict[str, dict] = {}
-    for region, grp in df.groupby("region"):
-        grp = grp.sort_values(x).reset_index(drop=True)
-        if grain == "yearly":
-            xs = grp[x].astype(int).tolist()
-        else:
-            xs = [v.isoformat() if hasattr(v, "isoformat") else str(v) for v in grp[x]]
-        ys = [None if pd.isna(v) else float(v) for v in grp[metric]]
-        series_out[region] = {
-            "label": REGION_LABEL.get(region, region),
-            "x": xs,
-            "y": ys,
-            "n_points": grp["n_points"].tolist() if "n_points" in grp.columns else None,
-        }
-
-    meta = next(m for m in METRICS if m["key"] == metric)
-    return JSONResponse({
-        "tag": tag,
-        "grain": grain,
-        "metric": metric,
-        "metric_label": meta["label"],
-        "unit": meta["unit"],
-        "series": series_out,
-        "row_counts": {r: len(v["x"]) for r, v in series_out.items()},
-    })
+    return JSONResponse(series_payload(validate_tag(tag), grain, metric))
 
 
 # ---------------------------------------------------------------------------
@@ -259,11 +178,12 @@ def detail(
     grain: Literal["daily", "monthly", "yearly"] = Query(...),
     bucket: str = Query(..., description="ISO date for daily/monthly buckets, integer year for yearly"),
 ) -> JSONResponse:
+    validate_tag(tag)
     if grain == "daily":
         # Hourly drill: aggregate per (hour, region) across the 3 points so each
         # row shows one timestamp with SCC + WA side-by-side. stay_outside becomes
         # a "N of 3 points passed" score instead of a per-point bool.
-        path = CURATED / f"hourly_{tag}.parquet"
+        path = data.CURATED / f"hourly_{tag}.parquet"
         if not path.exists():
             raise HTTPException(404, f"no hourly rollup for tag={tag}")
         try:
@@ -312,7 +232,7 @@ def detail(
             d = date.fromisoformat(bucket[:10])
         except ValueError as e:
             raise HTTPException(400, f"bad monthly bucket: {bucket}") from e
-        df = _load(tag, "daily")
+        df = load_rollup(tag, "daily")
         ld = pd.to_datetime(df["local_date"])
         df = df[(ld.dt.year == d.year) & (ld.dt.month == d.month)].sort_values(["local_date", "region"]).reset_index(drop=True)
         detail_grain = "daily"
@@ -323,9 +243,10 @@ def detail(
             y = int(bucket)
         except ValueError as e:
             raise HTTPException(400, f"bad yearly bucket: {bucket}") from e
-        df = _load(tag, "monthly")
+        df = load_rollup(tag, "monthly")
         df = df[df["year"] == y].sort_values(["month", "region"]).reset_index(drop=True)
-        df["month_label"] = df.apply(lambda r: f"{int(r['year']):04d}-{int(r['month']):02d}", axis=1)
+        # copy: load_rollup frames are cached and shared
+        df = df.assign(month_label=df.apply(lambda r: f"{int(r['year']):04d}-{int(r['month']):02d}", axis=1))
         detail_grain = "monthly"
         x_key = "month_label"
 
