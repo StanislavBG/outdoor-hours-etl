@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from classifier.hourly import region_hourly
 from classifier.personal import PROFILES, DEFAULT_PROFILE_ID
 from etl.catalog import METRICS, X_COL, json_scalar
 from etl.points import REGIONS
@@ -60,79 +61,55 @@ def export_grain(tag: str, grain: str) -> dict:
     return out
 
 
+_HOURLY_COLS = (
+    "ts_local", "region", "is_day", "temperature_2m", "uv_index_est", "precipitation",
+    "cloud_cover", "relative_humidity_2m", "wind_gusts_10m", "us_aqi",
+)
+_HOURLY_METRICS = (
+    "ok_day", "temperature_2m", "uv_index_est", "precipitation", "cloud_cover",
+    "relative_humidity_2m", "us_aqi", "wind_gusts_10m",
+)
+_REGION_FIELDS = ("stay_outside_pts", "n_points") + _HOURLY_METRICS
+
+
 def export_hourly_months(tag: str) -> int:
-    """Write one JSON per YYYY-MM with all hourly rows for that month, both regions paired.
-    Enables lazy drill-down on the public site without shipping the whole 14 MB hourly parquet.
+    """Write one JSON per YYYY-MM with all hourly rows for that month, regions paired.
+    Enables lazy drill-down on the public site without shipping the whole hourly parquet.
     """
     import duckdb
-    hourly_path = ROOT / "data" / "curated" / f"hourly_{tag}.parquet"
+    hourly_path = CURATED / f"hourly_{tag}.parquet"
     if not hourly_path.exists():
         print(f"skip hourly export: {hourly_path} not found")
         return 0
     hourly_dir = OUT / "hourly"
     hourly_dir.mkdir(parents=True, exist_ok=True)
 
-    raw = duckdb.connect().execute(
-        """
-        SELECT CAST(ts_local AS DATE) AS d, ts_local, region,
-               is_day, temperature_2m, uv_index_est, precipitation, cloud_cover,
-               relative_humidity_2m, wind_gusts_10m, us_aqi
-          FROM read_parquet(?)
-         ORDER BY ts_local, region
-        """,
-        [str(hourly_path)],
-    ).fetchdf()
+    con = duckdb.connect()
+    have = {r[0] for r in con.execute("DESCRIBE SELECT * FROM read_parquet(?)", [str(hourly_path)]).fetchall()}
+    cols = ", ".join(c for c in _HOURLY_COLS if c in have)
+    raw = con.execute(f"SELECT {cols} FROM read_parquet(?)", [str(hourly_path)]).fetchdf()
 
-    # Compute classifier flags + per-row ok_day (Int). Mirrors classifier/personal.py.
-    from classifier.personal import (
-        COLD_C, HOT_C, UV_MAX, RAIN_MAX_MM_H, OVERCAST_MAX_PCT, HUMIDITY_MAX_PCT,
-    )
-    raw["is_day_ok"] = (raw["is_day"] == 1).astype(int)
-    temp_ok  = raw["temperature_2m"].between(COLD_C, HOT_C)
-    uv_ok    = raw["uv_index_est"] <= UV_MAX
-    prec_ok  = raw["precipitation"] <= RAIN_MAX_MM_H
-    cloud_ok = raw["cloud_cover"].fillna(0) <= OVERCAST_MAX_PCT
-    humid_ok = raw["relative_humidity_2m"].fillna(0) <= HUMIDITY_MAX_PCT
-    raw["stay"] = ((raw["is_day"] == 1) & temp_ok & uv_ok & prec_ok & cloud_ok & humid_ok).astype(int)
-
-    # Aggregate per (ts_local, region) across the 3 sample points.
-    agg = (
-        raw.groupby(["ts_local", "region"], as_index=False)
-        .agg(
-            stay_outside_pts=("stay", "sum"),
-            ok_day=("is_day_ok", "max"),
-            temperature_2m=("temperature_2m", "mean"),
-            uv_index_est=("uv_index_est", "mean"),
-            precipitation=("precipitation", "mean"),
-            cloud_cover=("cloud_cover", "mean"),
-            relative_humidity_2m=("relative_humidity_2m", "mean"),
-            us_aqi=("us_aqi", "mean"),
-            wind_gusts_10m=("wind_gusts_10m", "max"),
-        )
-    )
-    agg["month"] = pd.to_datetime(agg["ts_local"]).dt.strftime("%Y-%m")
+    agg = region_hourly(raw)
+    agg["ok_day"] = agg["ok_day"].astype(int)
+    metrics = agg[list(_HOURLY_METRICS)].astype(object)
+    agg[list(_HOURLY_METRICS)] = metrics.where(metrics.notna(), None)
+    # Format each distinct timestamp once; regions share ts values.
+    codes, uniq = pd.factorize(agg["ts_local"])
+    agg["ts"] = uniq.strftime("%Y-%m-%dT%H:%M:%S").to_numpy()[codes]
+    agg["month"] = agg["ts"].str.slice(0, 7)
+    agg = agg.sort_values(["ts", "region"], kind="stable")
 
     count = 0
-    for month, grp in agg.groupby("month"):
-        # Pivot to {ts: {region: {...metric: val}}}
-        by_ts: dict = {}
-        for _, r in grp.iterrows():
-            ts = r["ts_local"].isoformat() if hasattr(r["ts_local"], "isoformat") else str(r["ts_local"])
-            slot = by_ts.setdefault(ts, {"ts": ts})
-            slot[r["region"]] = {
-                "stay_outside_pts": int(r["stay_outside_pts"]),
-                "ok_day":           int(r["ok_day"]),
-                "temperature_2m":   json_scalar(r["temperature_2m"]),
-                "uv_index_est":     json_scalar(r["uv_index_est"]),
-                "precipitation":    json_scalar(r["precipitation"]),
-                "cloud_cover":      json_scalar(r["cloud_cover"]),
-                "relative_humidity_2m": json_scalar(r["relative_humidity_2m"]),
-                "us_aqi":           json_scalar(r["us_aqi"]),
-                "wind_gusts_10m":   json_scalar(r["wind_gusts_10m"]),
-            }
-        rows = sorted(by_ts.values(), key=lambda x: x["ts"])
-        out_f = hourly_dir / f"{month}.json"
-        out_f.write_text(json.dumps({"month": month, "rows": rows}, separators=(",", ":")))
+    for month, grp in agg.groupby("month", sort=True):
+        rows: list[dict] = []
+        last_ts = None
+        for ts, region, rec in zip(grp["ts"], grp["region"], grp[list(_REGION_FIELDS)].to_dict("records")):
+            if ts != last_ts:
+                rows.append({"ts": ts})
+                last_ts = ts
+            rows[-1][region] = rec
+        (hourly_dir / f"{month}.json").write_text(
+            json.dumps({"month": month, "rows": rows}, separators=(",", ":")))
         count += 1
     return count
 
