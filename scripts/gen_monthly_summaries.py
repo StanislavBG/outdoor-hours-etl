@@ -7,7 +7,6 @@ Writes: data/summaries/monthly_last10y.json  {"YYYY-MM": "sentence", ...}
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -15,6 +14,7 @@ from pathlib import Path
 import pandas as pd
 
 from etl.points import REGIONS
+from scripts._claude import run_claude
 
 ROOT = Path(__file__).resolve().parents[1]
 CURATED = ROOT / "data" / "curated"
@@ -56,17 +56,7 @@ def build_prompt(year: int, month: int, rows: pd.DataFrame) -> str:
 
 
 def call_claude(prompt: str, timeout: int = 90) -> str:
-    r = subprocess.run(
-        ["claude", "-p"],
-        input=prompt,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        check=False,
-    )
-    if r.returncode != 0:
-        raise RuntimeError(f"claude -p failed rc={r.returncode}: {r.stderr[:200]}")
-    text = r.stdout.strip()
+    text = run_claude(prompt, timeout=timeout)
     if not text:
         raise RuntimeError("claude -p returned empty")
     return text

@@ -6,12 +6,12 @@ Writes: data/summaries/range_overview.json  {tag: "paragraph", ...}
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 
 import pandas as pd
 
 from etl.points import REGIONS
+from scripts._claude import run_claude
 
 ROOT = Path(__file__).resolve().parents[1]
 CURATED = ROOT / "data" / "curated"
@@ -55,10 +55,7 @@ def build_prompt(tag: str, df: pd.DataFrame) -> str:
 
 
 def call_claude(prompt: str) -> str:
-    r = subprocess.run(["claude", "-p"], input=prompt, capture_output=True, text=True, timeout=120, check=False)
-    if r.returncode != 0:
-        raise RuntimeError(f"claude -p failed: {r.stderr[:200]}")
-    return r.stdout.strip()
+    return run_claude(prompt, timeout=120)
 
 
 def main() -> None:

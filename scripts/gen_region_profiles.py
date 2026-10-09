@@ -20,13 +20,13 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 
 import pandas as pd
 
 from etl.points import REGIONS
+from scripts._claude import run_claude
 
 ROOT = Path(__file__).resolve().parents[1]
 CURATED = ROOT / "data" / "curated"
@@ -76,17 +76,7 @@ def build_prompt(region_key: str, label: str, stats: str) -> str:
 
 
 def call_claude(prompt: str, timeout: int = 90) -> dict:
-    r = subprocess.run(
-        ["claude", "-p"],
-        input=prompt,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        check=False,
-    )
-    if r.returncode != 0:
-        raise RuntimeError(f"claude -p failed rc={r.returncode}: {r.stderr[:200]}")
-    text = r.stdout.strip()
+    text = run_claude(prompt, timeout=timeout)
     # Strip code fences if claude added them despite instructions.
     text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.MULTILINE).strip()
     try:
