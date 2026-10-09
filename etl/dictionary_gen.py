@@ -27,7 +27,7 @@ def render(manifest: dict, schema_rows: list[tuple[str, str]]) -> str:
         "region": ("string", "County region id (santa_clara_ca | eastside_king_wa)"),
         "point": ("string", "Point id (san_jose, palo_alto, morgan_hill, bellevue, redmond, woodinville)"),
         "ts_utc": ("timestamp UTC", "Start of hour, UTC"),
-        "ts_local": ("timestamp local", "Start of hour, America/Los_Angeles"),
+        "ts_local": ("timestamp local", "Start of hour, local wall-clock time of the point's own timezone (naive)"),
         "lat": ("float", "Point latitude (degrees)"),
         "lon": ("float", "Point longitude (degrees)"),
         "elevation_m": ("int", "Point elevation (meters, approximate)"),

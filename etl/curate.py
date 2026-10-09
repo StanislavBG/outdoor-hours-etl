@@ -118,7 +118,14 @@ def build(tag: str) -> Path:
         full["pm2_5"] = pd.NA
         full["pm10"] = pd.NA
         print("  AQ join: no AQ data on disk (skipped)")
-    full["ts_local"] = full["ts_utc"].dt.tz_convert("America/Los_Angeles")
+    # Each point's own local wall-clock time, stored tz-naive (one dtype for the frame).
+    tz_by_point = {p.id: p.timezone for p in POINTS}
+    ts_local = pd.Series(pd.NaT, index=full.index, dtype="datetime64[ns]")
+    for pid, tz in tz_by_point.items():
+        mask = full["point"] == pid
+        if mask.any():
+            ts_local[mask] = full.loc[mask, "ts_utc"].dt.tz_convert(tz).dt.tz_localize(None).astype("datetime64[ns]")
+    full["ts_local"] = ts_local
     full["year"] = full["ts_local"].dt.year.astype("int16")
     full["month"] = full["ts_local"].dt.month.astype("int8")
     full["day"] = full["ts_local"].dt.day.astype("int8")
