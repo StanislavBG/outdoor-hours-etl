@@ -53,9 +53,9 @@ const FMT = {
   },
 };
 
-export function fmtCell(val, fmt) {
+export function fmtCell(val, fmt, max) {
   if (fmt === 'bool') return FMT.bool(val);
-  if (fmt === 'pts')  return FMT.pts(val);
+  if (fmt === 'pts')  return FMT.pts(val, max ?? 3);
   if (fmt && FMT[fmt]) return FMT[fmt](val);
   return val == null ? '' : String(val);
 }

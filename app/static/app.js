@@ -1,4 +1,5 @@
-import { escapeHtml, fmtValue, prettyBucket, toBucket, fmtCell, cellClass } from './js/format.js';
+import { escapeHtml, fmtValue, toBucket } from './js/format.js';
+import { createDetailPanel } from './js/detail.js';
 import { buildTakeaway, renderTakeaway, renderHeroStats } from './js/takeaway.js';
 
 // Friendly ordered list of ranges the UI surfaces. Unknown server tags still
@@ -20,6 +21,8 @@ const state = {
   regionsOn: new Set(),  // currently visible regions
   tag: null,             // currently selected dataset
 };
+
+let panel = null; // detail drill-down, created on DOMContentLoaded
 
 function regionColor(key) { return state.regionRegistry[key]?.color || '#888'; }
 function regionInk(key)   { return state.regionRegistry[key]?.ink   || '#555'; }
@@ -209,7 +212,7 @@ async function refresh() {
     const p = ev.points[0];
     const rawX = p.data.x[p.pointIndex];
     const bucket = toBucket(rawX, grain);
-    openDetail({
+    panel.open({
       tag, grain, bucket,
       xLabel: String(rawX),
       metricLabel: data.metric_label,
@@ -218,203 +221,10 @@ async function refresh() {
   });
 }
 
-// ---- detail panel ------------------------------------------------------
-
-const REGION_ORDER_DEFAULT = ['santa_clara_ca', 'eastside_king_wa'];
-const REGION_CLASS = { santa_clara_ca: 'col-scc', eastside_king_wa: 'col-king' };
-const REGION_SHORT = { santa_clara_ca: 'SCC', eastside_king_wa: 'WA' };
-
-// Winner highlighting for the leading classification metric.
-function leadingWinner(row, key, regionOrder, higherIsBetter = true) {
-  const vals = regionOrder.map(r => row[r]?.[key]).filter(v => v != null && Number.isFinite(Number(v)));
-  if (vals.length < 2) return null;
-  const best = higherIsBetter ? Math.max(...vals) : Math.min(...vals);
-  return regionOrder.find(r => Number(row[r]?.[key]) === best);
-}
-
-/**
- * Render the side-by-side detail table.
- * @param columns   list of {key, label, fmt, paired, leading}
- * @param rows      list of {_x, <region>: {col: val, ...}, <shared_key>: val}
- * @param regions   {region_key: friendly_label}
- * @param order     [region_key, ...] (order to render)
- */
-function renderPairedTable(columns, rows, regions, order) {
-  const regionOrder = order || REGION_ORDER_DEFAULT;
-  const paired   = columns.filter(c => c.paired);
-  const shared   = columns.filter(c => !c.paired);
-  const leading  = paired.filter(c => c.leading);
-  const trailing = paired.filter(c => !c.leading);
-  const ordered = [...shared, ...leading, ...trailing];
-
-  // Two-tier header: top row groups region columns; bottom row is metric names.
-  let topHead = '';
-  let bottomHead = '';
-  ordered.forEach((c, i) => {
-    if (!c.paired) {
-      topHead += `<th rowspan="2" class="shared-hdr">${escapeHtml(c.label)}</th>`;
-      return;
-    }
-    // Classification leaders get a highlighted top-group (both regions under one banner).
-    const groupCls = c.leading ? 'hdr-lead' : '';
-    topHead += `<th colspan="${regionOrder.length}" class="group-hdr ${groupCls}"><span class="group-title">${escapeHtml(c.label)}</span></th>`;
-    regionOrder.forEach(r => {
-      bottomHead += `<th class="${REGION_CLASS[r]} ${c.leading ? 'hdr-lead-sub' : ''}"><span class="dot dot-${r === 'santa_clara_ca' ? 'scc' : 'king'}"></span>${escapeHtml(REGION_SHORT[r] ?? r)}</th>`;
-    });
-  });
-
-  const head = `<tr>${topHead}</tr><tr>${bottomHead}</tr>`;
-
-  // Rows: determine a winner per leading metric for subtle emphasis.
-  const body = rows.map(r => {
-    const winners = {};
-    leading.forEach(c => {
-      // For all our leading metrics (stay_outside_*, pct_daytime_outside), higher is better.
-      winners[c.key] = leadingWinner(r, c.key, regionOrder, true);
-    });
-    const cells = ordered.map(c => {
-      if (!c.paired) {
-        const raw = r[c.key] ?? r._x;
-        return `<td class="shared ${cellClass(c.fmt)}">${fmtCell(raw, c.fmt)}</td>`;
-      }
-      return regionOrder.map(region => {
-        const raw = r[region]?.[c.key];
-        const isLead = c.leading;
-        const winCls = isLead && winners[c.key] === region ? ' leader' : '';
-        const leadCls = isLead ? ' lead-cell' : '';
-        return `<td class="${cellClass(c.fmt)} ${REGION_CLASS[region]}${winCls}${leadCls}">${fmtCell(raw, c.fmt)}</td>`;
-      }).join('');
-    }).join('');
-    return `<tr>${cells}</tr>`;
-  }).join('');
-
-  return `<table class="paired-table"><thead>${head}</thead><tbody>${body}</tbody></table>`;
-}
-
-// Drill stack: each entry = {grain, bucket, xLabel}. Breadcrumbs from the stack
-// let the user hop back up without closing the panel.
-let drillStack = [];
-let drillCtx = null; // {tag, metricLabel, unit}
-
-async function openDetail({ tag, grain, bucket, xLabel, metricLabel, unit }) {
-  drillStack = [{ grain, bucket, xLabel }];
-  drillCtx = { tag, metricLabel, unit };
-  el('detail').hidden = false;
-  await loadDetailLevel();
-}
-
-async function drillFurther(newGrain, newBucket, newXLabel) {
-  drillStack.push({ grain: newGrain, bucket: newBucket, xLabel: newXLabel });
-  await loadDetailLevel();
-}
-
-async function drillUp(toIndex) {
-  drillStack = drillStack.slice(0, toIndex + 1);
-  await loadDetailLevel();
-}
-
-function renderBreadcrumb() {
-  const crumbs = drillStack.map((s, i) => {
-    const last = i === drillStack.length - 1;
-    const label = `${escapeHtml(s.xLabel)}<span class="crumb-grain"> · ${escapeHtml(s.grain)}</span>`;
-    return last
-      ? `<span class="crumb crumb-here">${label}</span>`
-      : `<button class="crumb crumb-link" data-i="${i}">${label}</button>`;
-  }).join('<span class="crumb-sep">›</span>');
-  return `<nav class="detail-crumbs">${crumbs}</nav>`;
-}
-
-async function loadDetailLevel() {
-  if (!drillStack.length || !drillCtx) return;
-  const current = drillStack[drillStack.length - 1];
-  const { tag, metricLabel, unit } = drillCtx;
-  el('detail-body').innerHTML = '<p class="detail-empty">Loading…</p>';
-  el('detail-title').textContent = `${current.xLabel} — side-by-side`;
-  el('detail-sub').textContent = `Drill by ${metricLabel ? metricLabel.toLowerCase() : 'metric'}${unit ? ' · ' + unit + ' where applicable' : ''}`;
-
-  try {
-    const qs = new URLSearchParams({ tag, grain: current.grain, bucket: current.bucket }).toString();
-    const d = await j(`/api/detail?${qs}`);
-    if (!d.rows.length) {
-      el('detail-body').innerHTML = renderBreadcrumb() + '<p class="detail-empty">No underlying rows for this point.</p>';
-      wireCrumbs();
-      return;
-    }
-    let note;
-    if (d.detail_grain === 'hourly') {
-      note = `<p class="detail-hint">${escapeHtml(d.n_rows)} hourly rows. <strong>Stay-out</strong> = how many of the 3 sample neighborhoods passed <em>all four</em> rules that hour. The columns to the right show the <em>reason</em> — daytime, temperature, UV, rain — so you can see which rule killed the hour. Winner highlighted per row.</p>`;
-    } else {
-      const canDrill = d.detail_grain === 'daily' || d.detail_grain === 'monthly';
-      note = `<p class="detail-hint">${escapeHtml(d.n_rows)} ${escapeHtml(d.detail_grain)} rows, both counties side by side. Classification columns lead; winner starred.${canDrill ? ' <strong>Click any row</strong> to drop down to the ' + (d.detail_grain === 'daily' ? 'hour-by-hour' : 'day-by-day') + ' view.' : ''}</p>`;
-    }
-    el('detail-body').innerHTML = renderBreadcrumb() + note + renderPairedTable(d.columns, d.rows, d.regions, d.region_order);
-
-    wireCrumbs();
-    wireRowDrill(d);
-  } catch (err) {
-    el('detail-body').innerHTML = renderBreadcrumb() + `<p class="detail-empty">Failed to load detail: ${escapeHtml(err.message)}</p>`;
-    wireCrumbs();
-  }
-}
-
-function wireCrumbs() {
-  el('detail-body').querySelectorAll('.crumb-link').forEach(btn => {
-    btn.addEventListener('click', () => drillUp(Number(btn.dataset.i)));
-  });
-}
-
-function wireRowDrill(d) {
-  // Attach data attributes to <tr> and listen for row clicks, only when a
-  // deeper drill makes sense (daily → hourly, monthly → daily).
-  if (d.detail_grain !== 'daily' && d.detail_grain !== 'monthly') return;
-  const tbody = el('detail-body').querySelector('.paired-table tbody');
-  if (!tbody) return;
-  tbody.classList.add('drillable');
-  const rows = tbody.querySelectorAll('tr');
-  d.rows.forEach((r, i) => {
-    const tr = rows[i];
-    if (!tr) return;
-    const rawX = r._x;
-    const xStr = typeof rawX === 'string' ? rawX : String(rawX);
-    // What grain do we drill TO? The current detail_grain IS the bucket we're
-    // clicking; a click's grain parameter becomes that detail_grain, and the
-    // endpoint returns a finer breakdown.
-    const nextGrain = d.detail_grain; // 'daily' or 'monthly'
-    let nextBucket;
-    let nextLabel;
-    if (nextGrain === 'daily') {
-      nextBucket = xStr.slice(0, 10);
-      nextLabel = prettyBucket(xStr, 'daily');
-    } else { // monthly
-      // r._x for monthly is a "YYYY-MM" label from month_label → use as month_start
-      nextBucket = `${xStr}-01`;
-      nextLabel = prettyBucket(nextBucket, 'monthly');
-    }
-    tr.addEventListener('click', () => drillFurther(nextGrain, nextBucket, nextLabel));
-  });
-}
-
-function closeDetail() {
-  el('detail').hidden = true;
-  el('detail').classList.remove('fullscreen');
-  document.body.classList.remove('detail-open');
-}
-
-function toggleFullscreen() {
-  const p = el('detail');
-  const on = p.classList.toggle('fullscreen');
-  document.body.classList.toggle('detail-open', on);
-  el('detail-fs').textContent = on ? '⤡ Exit full screen' : '⤢ Full screen';
-}
-
 window.addEventListener('DOMContentLoaded', async () => {
   await loadCatalogs();
+  panel = createDetailPanel({ root: el('detail'), fetchJson: j, getVisibleRegions: visibleRegions });
   el('grain').addEventListener('change', refresh);
   el('metric').addEventListener('change', refresh);
-  el('detail-close').addEventListener('click', closeDetail);
-  el('detail-fs').addEventListener('click', toggleFullscreen);
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !el('detail').hidden) closeDetail();
-  });
   await refresh();
 });

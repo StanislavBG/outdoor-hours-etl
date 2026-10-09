@@ -382,13 +382,11 @@ code, .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo
   display: inline-block; width: 8px; height: 8px; border-radius: 50%;
   margin-right: 5px; vertical-align: middle;
 }
-.paired-table .dot-scc  { background: var(--scc); }
-.paired-table .dot-king { background: var(--king); }
+.paired-table .dot { background: var(--region-color); }
 
 .paired-table tbody td { padding: 9px 12px; border-bottom: 1px solid #eef0f5; }
 .paired-table tbody td.shared { font-weight: 600; background: #fafbff; border-right: 2px solid #e3e6ef; }
-.paired-table tbody td.col-scc  { border-right: 1px dashed #e8ebf3; }
-.paired-table tbody td.col-king { border-right: 1px solid #dde2ef; }
+.paired-table tbody td.col-region { border-right: 1px dashed #e8ebf3; }
 .paired-table tbody td.lead-cell { background: rgba(64, 85, 241, 0.03); font-weight: 600; }
 .paired-table tbody td.leader {
   background: linear-gradient(90deg, rgba(64, 85, 241, 0.10), rgba(64, 85, 241, 0.03));
