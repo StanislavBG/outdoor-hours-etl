@@ -11,68 +11,22 @@ serve every (metric, grain) combo locally without a backend.
 from __future__ import annotations
 
 import json
-import math
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
 
 from classifier.personal import PROFILES, DEFAULT_PROFILE_ID
+from etl.catalog import METRICS, X_COL, json_scalar
 from etl.points import REGIONS
 
 ROOT = Path(__file__).resolve().parents[1]
 CURATED = ROOT / "data" / "curated"
-OUT = Path("/home/bilko/Projects/Bilko/public/outdoor-hours")
+OUT = Path(os.environ.get("OUTDOOR_HOURS_OUT", "/home/bilko/Projects/Bilko/public/outdoor-hours"))
 
 REGION_LABEL = {k: v["label"] for k, v in REGIONS.items()}
 REGION_ORDER = list(REGIONS.keys())
-
-# Mirror app/server.py METRICS list — keep keys/labels/units in sync.
-# stay_outside_hours / pct_daytime_outside are aliases for the default profile;
-# the frontend swaps to stay_outside_<profile>_hours when the user picks a
-# different profile.
-METRICS = [
-    {"key": "stay_outside_hours",          "label": "Good-for-outdoors hours",          "unit": "hours", "kind": "sum",  "profile_aware": True},
-    {"key": "pct_daytime_outside",         "label": "% of daylight that's comfortable", "unit": "%",     "kind": "pct",  "profile_aware": True},
-    {"key": "temperature_2m_mean",         "label": "Average temperature",              "unit": "°C",    "kind": "mean"},
-    {"key": "temperature_2m_max",          "label": "Hottest point",                    "unit": "°C",    "kind": "max"},
-    {"key": "apparent_temperature_mean",   "label": "Average feels-like temperature",   "unit": "°C",    "kind": "mean"},
-    {"key": "uv_index_est_mean",           "label": "Average UV",                       "unit": "UV",    "kind": "mean"},
-    {"key": "uv_index_est_max",            "label": "Strongest UV",                     "unit": "UV",    "kind": "max"},
-    {"key": "cloud_cover_mean",            "label": "Cloudiness",                       "unit": "%",     "kind": "mean"},
-    {"key": "precipitation_sum",           "label": "Total rain",                       "unit": "mm",    "kind": "sum"},
-    {"key": "wind_speed_10m_mean",         "label": "Average wind",                     "unit": "m/s",   "kind": "mean"},
-    {"key": "wind_gusts_10m_max",          "label": "Strongest gust",                   "unit": "m/s",   "kind": "max"},
-    {"key": "sunshine_hours",              "label": "Sunshine hours",                   "unit": "hours", "kind": "sum"},
-    {"key": "relative_humidity_2m_mean",   "label": "Humidity",                         "unit": "%",     "kind": "mean"},
-    {"key": "pressure_msl_mean",           "label": "Air pressure",                     "unit": "hPa",   "kind": "mean"},
-    {"key": "us_aqi_mean",                 "label": "Air quality (US AQI)",             "unit": "AQI",   "kind": "mean"},
-    {"key": "us_aqi_max",                  "label": "Worst-hour AQI",                   "unit": "AQI",   "kind": "max"},
-    {"key": "pm2_5_mean",                  "label": "PM2.5",                            "unit": "µg/m³", "kind": "mean"},
-]
-
-X_COL = {"daily": "local_date", "monthly": "month_start", "yearly": "year"}
-
-
-def _clean(v):
-    if v is None:
-        return None
-    try:
-        if pd.isna(v):
-            return None
-    except (TypeError, ValueError):
-        pass
-    if isinstance(v, float) and not math.isfinite(v):
-        return None
-    if hasattr(v, "isoformat"):
-        return v.isoformat()
-    if hasattr(v, "item"):
-        try:
-            return v.item()
-        except Exception:
-            pass
-    return v
-
 
 def export_grain(tag: str, grain: str) -> dict:
     df = pd.read_parquet(CURATED / f"region_{grain}_{tag}.parquet")
@@ -88,16 +42,16 @@ def export_grain(tag: str, grain: str) -> dict:
         if grain == "yearly":
             xs = [int(v) for v in grp[x_col]]
         else:
-            xs = [_clean(v) for v in grp[x_col]]
+            xs = [json_scalar(v) for v in grp[x_col]]
         series = {}
         for m in METRICS:
             if m["key"] in grp.columns:
-                series[m["key"]] = [_clean(v) for v in grp[m["key"]]]
+                series[m["key"]] = [json_scalar(v) for v in grp[m["key"]]]
         # Per-profile good-hours + pct-daylight series for the global toggle.
         for p in PROFILES:
             for col in (f"stay_outside_{p.id}_hours", f"pct_daytime_outside_{p.id}"):
                 if col in grp.columns:
-                    series[col] = [_clean(v) for v in grp[col]]
+                    series[col] = [json_scalar(v) for v in grp[col]]
         out["regions"][region] = {
             "label": REGION_LABEL.get(region, region),
             "x": xs,
@@ -168,13 +122,13 @@ def export_hourly_months(tag: str) -> int:
             slot[r["region"]] = {
                 "stay_outside_pts": int(r["stay_outside_pts"]),
                 "ok_day":           int(r["ok_day"]),
-                "temperature_2m":   _clean(r["temperature_2m"]),
-                "uv_index_est":     _clean(r["uv_index_est"]),
-                "precipitation":    _clean(r["precipitation"]),
-                "cloud_cover":      _clean(r["cloud_cover"]),
-                "relative_humidity_2m": _clean(r["relative_humidity_2m"]),
-                "us_aqi":           _clean(r["us_aqi"]),
-                "wind_gusts_10m":   _clean(r["wind_gusts_10m"]),
+                "temperature_2m":   json_scalar(r["temperature_2m"]),
+                "uv_index_est":     json_scalar(r["uv_index_est"]),
+                "precipitation":    json_scalar(r["precipitation"]),
+                "cloud_cover":      json_scalar(r["cloud_cover"]),
+                "relative_humidity_2m": json_scalar(r["relative_humidity_2m"]),
+                "us_aqi":           json_scalar(r["us_aqi"]),
+                "wind_gusts_10m":   json_scalar(r["wind_gusts_10m"]),
             }
         rows = sorted(by_ts.values(), key=lambda x: x["ts"])
         out_f = hourly_dir / f"{month}.json"
@@ -228,9 +182,9 @@ def export_payload(tag: str, narratives: dict | None = None) -> None:
     target = OUT / f"{tag}.json"
     target.write_text(json.dumps(payload, separators=(",", ":")))
     size_kb = target.stat().st_size / 1024
-    # Count buckets from the first region found (in case some regions missing).
-    first = next((p["regions"][next(iter(p["regions"]))]["x"] for p in payload["grains"].values() if p["regions"]), [])
-    n = len(first)
+    # Count buckets from the first region found in the daily grain.
+    daily_regions = payload["grains"]["daily"]["regions"]
+    n = len(next(iter(daily_regions.values()))["x"]) if daily_regions else 0
     print(f"wrote {target} — {size_kb:.1f} KB, {n} daily buckets/region")
 
 
@@ -253,6 +207,7 @@ def load_summaries() -> dict:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     narratives = load_summaries()
+    failures: list[str] = []
     for tag in ("last1m", "last1y", "last5y", "last10y", "last30y"):
         src = CURATED / f"region_daily_{tag}.parquet"
         if not src.exists():
@@ -262,6 +217,7 @@ def main() -> None:
             export_payload(tag, narratives)
         except Exception as e:
             print(f"export {tag} failed: {e}")
+            failures.append(tag)
 
     # Hourly monthlies: only for the longest tag we have (saves disk).
     for tag in ("last30y", "last10y", "last5y"):
@@ -269,6 +225,9 @@ def main() -> None:
             n_months = export_hourly_months(tag)
             print(f"wrote {n_months} hourly monthly files from {tag} to {OUT / 'hourly'}")
             break
+
+    if failures:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
