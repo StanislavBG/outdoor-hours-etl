@@ -1,5 +1,6 @@
 import { escapeHtml, fmtValue, toBucket } from './js/format.js';
 import { createDetailPanel } from './js/detail.js';
+import { buildTraces, layoutFor, renderChart, clearChart } from './js/chart.js';
 import { buildTakeaway, renderTakeaway, renderHeroStats } from './js/takeaway.js';
 
 // Friendly ordered list of ranges the UI surfaces. Unknown server tags still
@@ -33,8 +34,8 @@ function visibleRegions() {
   return state.regionOrder.filter(r => state.regionsOn.has(r));
 }
 
-async function j(url) {
-  const r = await fetch(url);
+async function j(url, opts) {
+  const r = await fetch(url, opts);
   if (!r.ok) throw new Error(`${url}: ${r.status}`);
   return r.json();
 }
@@ -95,7 +96,7 @@ function renderRangePicker() {
         if (state.tag === r.tag) return;
         state.tag = r.tag;
         host.querySelectorAll('button').forEach(x => x.classList.toggle('active', x.dataset.tag === r.tag));
-        refresh();
+        reload();
       });
     }
     host.appendChild(b);
@@ -125,106 +126,77 @@ function renderRegionPicker() {
         state.regionsOn.add(region);
       }
       chip.classList.toggle('active');
-      refresh();
+      render();
     });
     host.appendChild(chip);
   });
 }
 
-function layoutFor(meta, grain) {
-  const grainLabel = { daily: 'Day', monthly: 'Month', yearly: 'Year' }[grain];
-  const inter = 'Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
-  return {
-    title: {
-      text: `${escapeHtml(meta.metric_label)}  <span style="color:#6b7388;font-weight:500">per ${grainLabel.toLowerCase()}</span>`,
-      font: { family: inter, size: 26, color: '#121726', weight: 800 },
-      x: 0.02, xanchor: 'left', y: 0.96,
-    },
-    font: { family: inter, color: '#39415a', size: 15 },
-    xaxis: {
-      title: { text: grain === 'yearly' ? 'Year' : 'Local date', font: { size: 15, color: '#6b7388' } },
-      type: grain === 'yearly' ? 'linear' : 'date',
-      showgrid: true, gridcolor: '#eef0f5',
-      linecolor: '#c9cedb', tickcolor: '#c9cedb',
-      tickfont: { size: 14 },
-    },
-    yaxis: {
-      title: { text: `${meta.metric_label} (${meta.unit})`, font: { size: 15, color: '#6b7388' } },
-      showgrid: true, gridcolor: '#eef0f5',
-      zerolinecolor: '#e3e6ef',
-      linecolor: '#c9cedb', tickcolor: '#c9cedb',
-      tickfont: { size: 14 },
-      rangemode: meta.metric === 'stay_outside_hours' ? 'tozero' : undefined,
-    },
-    hovermode: 'x unified',
-    hoverlabel: { bgcolor: '#121726', bordercolor: '#121726', font: { color: 'white', family: inter, size: 15 } },
-    legend: { orientation: 'h', y: -0.18, font: { size: 15, color: '#121726' }, bgcolor: 'rgba(0,0,0,0)' },
-    margin: { l: 80, r: 32, t: 80, b: 80 },
-    plot_bgcolor: 'white',
-    paper_bgcolor: 'white',
-    annotations: [
-      {
-        xref: 'paper', yref: 'paper', x: 0.015, y: 1.12, xanchor: 'left', yanchor: 'bottom',
-        text: `<span style="color:#6b7388">${escapeHtml(meta.tag)}</span>  ·  <span style="color:#6b7388">${escapeHtml(grain)}</span>  ·  <code style="color:#4055f1">${escapeHtml(meta.metric)}</code>`,
-        showarrow: false, font: { size: 11, family: inter },
-      },
-    ],
-  };
-}
+const seriesCache = { key: null, data: null };
+let seriesCtl = null;
 
-async function refresh() {
+async function loadSeries() {
   const tag = state.tag;
   const grain = el('grain').value;
   const metric = el('metric').value;
+  const key = `${tag}|${grain}|${metric}`;
+  if (seriesCtl) seriesCtl.abort();
+  if (seriesCache.key === key) return true;
+  const ctl = seriesCtl = new AbortController();
   el('tag-badge').textContent = `loading ${tag}/${grain}/${metric}…`;
-  const data = await j(`/api/series?tag=${encodeURIComponent(tag)}&grain=${grain}&metric=${metric}`);
+  try {
+    const data = await j(`/api/series?tag=${encodeURIComponent(tag)}&grain=${grain}&metric=${metric}`, { signal: ctl.signal });
+    if (ctl !== seriesCtl) return false;
+    seriesCache.key = key;
+    seriesCache.data = data;
+    return true;
+  } catch (err) {
+    if (err.name === 'AbortError' || ctl !== seriesCtl) return false;
+    seriesCache.key = null;
+    seriesCache.data = null;
+    clearChart(el('chart'));
+    el('chart').innerHTML = `<p class="chart-error">${escapeHtml("This metric isn't available for the selected range")}</p>`;
+    el('tag-badge').textContent = `${tag} · ${grain} · unavailable`;
+    return false;
+  }
+}
 
+function render() {
+  const data = seriesCache.data;
+  if (!data) return;
+  const [tag, grain, metric] = seriesCache.key.split('|');
+  const chartEl = el('chart');
+  if (chartEl.querySelector('.chart-error')) clearChart(chartEl);
   const visible = visibleRegions();
-  const traces = visible
-    .filter(region => data.series[region])
-    .map(region => {
-      const s = data.series[region];
-      return {
-        x: s.x, y: s.y, name: s.label, type: 'scatter', mode: 'lines+markers',
-        marker: { size: grain === 'yearly' ? 11 : 7, color: regionColor(region), line: { width: 1, color: 'white' } },
-        line: { width: 3, color: regionColor(region) },
-        meta: region,
-        hovertemplate: `<b>${escapeHtml(s.label)}</b><br>%{x}<br>${escapeHtml(data.metric_label)}: %{y:.2f} ${escapeHtml(data.unit)}<br><i>(click to drill in)</i><extra></extra>`,
-      };
+  renderChart(chartEl, buildTraces(data, visible, state.regionRegistry, grain), layoutFor(data, grain),
+    (rawX) => {
+      const [curTag, curGrain] = seriesCache.key.split('|');
+      panel.open({
+        tag: curTag, grain: curGrain, bucket: toBucket(rawX, curGrain),
+        xLabel: String(rawX),
+        metricLabel: data.metric_label,
+        unit: data.unit,
+      });
     });
-
-  Plotly.newPlot('chart', traces, layoutFor(data, grain), { responsive: true, displaylogo: false,
-    modeBarButtonsToRemove: ['lasso2d', 'select2d'] });
   const visibleCounts = visible.filter(r => data.series[r]).reduce((sum, r) => sum + (data.series[r]?.x?.length || 0), 0);
   el('tag-badge').textContent = `${tag} · ${grain} · ${visible.length} counties · ${visibleCounts} points`;
   const model = buildTakeaway({
     series: data.series, visible, metricMeta: state.metrics.find(m => m.key === metric),
     registry: state.regionRegistry, grain,
   });
-  const rangeDef = RANGE_ORDER.find(x => x.tag === state.tag);
+  const rangeDef = RANGE_ORDER.find(x => x.tag === tag);
   renderTakeaway(model, { text: el('takeaway-text'), aux: el('takeaway-aux'), host: el('takeaway') });
-  renderHeroStats(model, el('hero-stats'), rangeDef ? rangeDef.label : state.tag);
+  renderHeroStats(model, el('hero-stats'), rangeDef ? rangeDef.label : tag);
+}
 
-  const chartEl = el('chart');
-  chartEl.removeAllListeners && chartEl.removeAllListeners('plotly_click');
-  chartEl.on('plotly_click', (ev) => {
-    if (!ev.points || !ev.points.length) return;
-    const p = ev.points[0];
-    const rawX = p.data.x[p.pointIndex];
-    const bucket = toBucket(rawX, grain);
-    panel.open({
-      tag, grain, bucket,
-      xLabel: String(rawX),
-      metricLabel: data.metric_label,
-      unit: data.unit,
-    });
-  });
+async function reload() {
+  if (await loadSeries()) render();
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
   await loadCatalogs();
   panel = createDetailPanel({ root: el('detail'), fetchJson: j, getVisibleRegions: visibleRegions });
-  el('grain').addEventListener('change', refresh);
-  el('metric').addEventListener('change', refresh);
-  await refresh();
+  el('grain').addEventListener('change', reload);
+  el('metric').addEventListener('change', reload);
+  await reload();
 });
