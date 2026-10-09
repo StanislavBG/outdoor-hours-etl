@@ -38,3 +38,15 @@
 **Observation (not fixed, out of scope):** a non-JSON response in the weather fetcher surfaces as a bare JSON decode error rather than being retried/treated as a rate limit.
 
 **Next:** rerun `uv run python -m etl.sync` after the quota resets (resumes from disk), then steps 4-9 of the PRD.
+
+## 2026-10-09 — backfill completed, cron installed, published (job 08 retry)
+
+- **Gap count before:** 31 pieces (`etl.sync --dry-run`, 2:20 PM PDT): weather coral_gables 7, gabrovo_center 7, AQ 17.
+- **Code fix:** `cefc7ab` `fix(etl)`: `_client.fetch_json` now parses 2xx bodies defensively. Empty/non-JSON/`{"error":true}` raises `FetchBodyError` (status, Content-Type, first 200 chars) and is retried with backoff. A `reason` containing "limit" raises `RateLimitExhausted` with no retry; `etl.sync` returns 75 with `RATE_LIMITED:`. New `--piece-days`. Both classes re-exported from `etl.sources.open_meteo` (the shared fetch lives in `_client` since f522965). Tests: `tests/test_fetch_errors.py`.
+- **Cron installed before backfill:** `0 9 * * 1 /home/bilko/Projects/Weather/scripts/weekly_refresh.sh # weather-weekly-refresh`
+- **Probe** (coral_gables 2021-04-24..30): HTTP 200 `application/json`, valid hourly payload; no quota problem.
+- **Attempts** (`--delay 15 --piece-days 92`): 1) rc=124 time cap, 13 remaining by default 365-day planning; 2) rc=0, 26 fetched, 0 remaining. `etl.sync --check`: no gaps.
+- **Publish:** `weekly_refresh.sh` rc=0, `last_status.json` ok=true published=true (2:47 PM PDT). Bilko commit `2776c53` (only `public/outdoor-hours`). New pubdate `2026-10-09T21:45:42+00:00`.
+- **Live site:** `bilko.run/outdoor-hours/last1m.json` showed the new pubdate after ~4 polls (~2 min).
+- **Curated (hourly_last10y)** per region: 2016-04-19/20 → 2026-10-04/05, 11 calendar years each (12 regions).
+- **Health:** `etl.health` HEALTHY, exit 0.
