@@ -103,6 +103,7 @@ def build(tag: str) -> Path:
 
     full = pd.concat(frames, ignore_index=True)
     full["ts_utc"] = pd.to_datetime(full["ts_utc"], utc=True)
+    full = full.drop_duplicates(["point", "ts_utc"])
 
     # Left-join air-quality on (point, ts_utc). AQ archive only goes back to
     # ~Aug 2022 globally — pre-coverage rows get NULL us_aqi/pm columns,
