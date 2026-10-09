@@ -12,15 +12,14 @@ from __future__ import annotations
 
 import argparse
 import sys
-import time
 from datetime import date, timedelta
 from pathlib import Path
 
 import httpx
 import pandas as pd
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from etl.points import POINTS, Point
+from etl.sources import _client
 
 ROOT = Path(__file__).resolve().parents[2]
 RAW_DIR = ROOT / "data" / "raw" / "open_meteo_aq"
@@ -29,13 +28,7 @@ ENDPOINT = "https://air-quality-api.open-meteo.com/v1/air-quality"
 HOURLY_VARS = ["us_aqi", "pm2_5", "pm10"]
 
 
-@retry(
-    retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.TransportError)),
-    stop=stop_after_attempt(8),
-    wait=wait_exponential(multiplier=4, min=8, max=300),
-    reraise=True,
-)
-def _fetch(client: httpx.Client, point: Point, start: date, end: date) -> dict:
+def _fetch_df(client: httpx.Client, point: Point, start: date, end: date) -> pd.DataFrame:
     params = {
         "latitude": point.lat,
         "longitude": point.lon,
@@ -45,34 +38,7 @@ def _fetch(client: httpx.Client, point: Point, start: date, end: date) -> dict:
         "timezone": "UTC",
         "timeformat": "unixtime",
     }
-    r = client.get(ENDPOINT, params=params, timeout=180)
-    if r.status_code == 429:
-        retry_after = int(r.headers.get("Retry-After", "60"))
-        print(f"    429 rate-limited; sleeping {retry_after}s then retrying", flush=True)
-        time.sleep(retry_after)
-        r.raise_for_status()
-    r.raise_for_status()
-    return r.json()
-
-
-def _to_dataframe(payload: dict, point: Point) -> pd.DataFrame:
-    h = payload["hourly"]
-    df = pd.DataFrame(h)
-    df["ts_utc"] = pd.to_datetime(df.pop("time"), unit="s", utc=True)
-    df["point"] = point.id
-    df["region"] = point.region
-    cols = ["region", "point", "ts_utc"] + [c for c in df.columns if c not in {"region", "point", "ts_utc"}]
-    return df[cols]
-
-
-def _day_chunks(start: date, end: date, max_days: int) -> list[tuple[date, date]]:
-    out: list[tuple[date, date]] = []
-    cur = start
-    while cur <= end:
-        nxt = min(cur + timedelta(days=max_days - 1), end)
-        out.append((cur, nxt))
-        cur = nxt + timedelta(days=1)
-    return out
+    return _client.to_dataframe(_client.fetch_json(client, ENDPOINT, params), point)
 
 
 def download(
@@ -87,22 +53,12 @@ def download(
 ) -> list[Path]:
     out_dir = RAW_DIR / point.region / point.id / tag
     out_dir.mkdir(parents=True, exist_ok=True)
-    written: list[Path] = []
     with httpx.Client() as client:
-        for cstart, cend in _day_chunks(start, end, max_days_per_call):
-            fname = f"{cstart.isoformat()}_{cend.isoformat()}.parquet"
-            fpath = out_dir / fname
-            if fpath.exists() and not overwrite:
-                print(f"  skip {point.id} {fname} (exists)", flush=True)
-                written.append(fpath)
-                continue
-            print(f"  fetch {point.id} {cstart}..{cend}", flush=True)
-            payload = _fetch(client, point, cstart, cend)
-            df = _to_dataframe(payload, point)
-            df.to_parquet(fpath, index=False, compression="zstd")
-            written.append(fpath)
-            time.sleep(inter_call_delay_s)
-    return written
+        return _client.download_chunks(
+            client, point, start, end, out_dir,
+            max_days=max_days_per_call, overwrite=overwrite, delay_s=inter_call_delay_s,
+            fetch=lambda cs, ce: _fetch_df(client, point, cs, ce),
+        )
 
 
 def main() -> int:
