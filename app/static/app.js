@@ -1,4 +1,5 @@
 import { escapeHtml, fmtValue, prettyBucket, toBucket, fmtCell, cellClass } from './js/format.js';
+import { buildTakeaway, renderTakeaway, renderHeroStats } from './js/takeaway.js';
 
 // Friendly ordered list of ranges the UI surfaces. Unknown server tags still
 // show up at the end of the picker.
@@ -193,7 +194,13 @@ async function refresh() {
     modeBarButtonsToRemove: ['lasso2d', 'select2d'] });
   const visibleCounts = visible.filter(r => data.series[r]).reduce((sum, r) => sum + (data.series[r]?.x?.length || 0), 0);
   el('tag-badge').textContent = `${tag} · ${grain} · ${visible.length} counties · ${visibleCounts} points`;
-  updateTakeaway(data, state.metrics.find(m => m.key === metric), visible);
+  const model = buildTakeaway({
+    series: data.series, visible, metricMeta: state.metrics.find(m => m.key === metric),
+    registry: state.regionRegistry, grain,
+  });
+  const rangeDef = RANGE_ORDER.find(x => x.tag === state.tag);
+  renderTakeaway(model, { text: el('takeaway-text'), aux: el('takeaway-aux'), host: el('takeaway') });
+  renderHeroStats(model, el('hero-stats'), rangeDef ? rangeDef.label : state.tag);
 
   const chartEl = el('chart');
   chartEl.removeAllListeners && chartEl.removeAllListeners('plotly_click');
@@ -209,129 +216,6 @@ async function refresh() {
       unit: data.unit,
     });
   });
-}
-
-// ---- takeaway cards ----------------------------------------------------
-
-function regionSummary(ys, kind) {
-  const vals = ys.filter(v => v != null && Number.isFinite(v));
-  if (!vals.length) return { value: null, kind };
-  if (kind === 'sum') return { value: vals.reduce((a, b) => a + b, 0), kind };
-  if (kind === 'max') return { value: Math.max(...vals), kind };
-  // mean / pct / fallback
-  return { value: vals.reduce((a, b) => a + b, 0) / vals.length, kind };
-}
-
-function verbForKind(kind) {
-  return { sum: 'added up to', max: 'peaked at', pct: 'averaged', mean: 'averaged' }[kind] || 'came in at';
-}
-
-function findExtremes(xs, ys) {
-  let hiI = -1, loI = -1, hi = -Infinity, lo = Infinity;
-  for (let i = 0; i < ys.length; i++) {
-    const v = ys[i];
-    if (v == null || !Number.isFinite(v)) continue;
-    if (v > hi) { hi = v; hiI = i; }
-    if (v < lo) { lo = v; loI = i; }
-  }
-  return {
-    hi: hiI >= 0 ? { x: xs[hiI], y: hi } : null,
-    lo: loI >= 0 ? { x: xs[loI], y: lo } : null,
-  };
-}
-
-const HIGHER_BETTER = new Set(['stay_outside_hours', 'pct_daytime_outside', 'sunshine_hours']);
-const LOWER_BETTER  = new Set(['precipitation_sum', 'cloud_cover_mean', 'wind_gusts_10m_max', 'relative_humidity_2m_mean']);
-
-function updateTakeaway(data, meta, visible) {
-  const unit = data.unit;
-  const metric = data.metric;
-  const kind = (meta && meta.kind) || 'sum';
-
-  const board = visible
-    .filter(r => data.series[r])
-    .map(r => {
-      const s = data.series[r];
-      const sum = regionSummary(s.y, kind).value;
-      const ex = findExtremes(s.x, s.y);
-      return { region: r, label: regionLabel(r), short: regionShort(r), color: regionColor(r), ink: regionInk(r), value: sum, peak: ex.hi };
-    })
-    .filter(r => r.value != null && Number.isFinite(r.value));
-
-  const higherBetter = HIGHER_BETTER.has(metric);
-  const lowerBetter  = LOWER_BETTER.has(metric);
-  const ranked = [...board].sort((a, b) => lowerBetter ? (a.value - b.value) : (b.value - a.value));
-
-  renderHeroStats(ranked, unit, higherBetter || lowerBetter);
-
-  const tkw = document.getElementById('takeaway-text');
-  let auxEl = document.getElementById('takeaway-aux');
-  if (!auxEl) {
-    const host = document.getElementById('takeaway');
-    if (host) {
-      auxEl = document.createElement('div');
-      auxEl.id = 'takeaway-aux';
-      auxEl.className = 'takeaway-aux';
-      host.appendChild(auxEl);
-    }
-  }
-
-  if (ranked.length < 2) {
-    if (tkw) tkw.innerHTML = `<em>${escapeHtml(data.metric_label)}</em> shown for ${ranked.length ? escapeHtml(ranked[0].label) : 'no counties'}. Toggle another county above to compare.`;
-    if (auxEl) auxEl.innerHTML = '';
-    return;
-  }
-
-  const leader = ranked[0];
-  const trailer = ranked[ranked.length - 1];
-  const spread = Math.abs(leader.value - trailer.value);
-  const pct = spread / Math.max(Math.abs(leader.value), Math.abs(trailer.value)) * 100;
-
-  let headline;
-  const verb = lowerBetter ? 'the least' : higherBetter ? 'the most' : null;
-  if (verb) {
-    headline = `<span style="color:${leader.ink}"><strong>${escapeHtml(leader.label.replace(/,.*$/, ''))}</strong></span> has ${verb} <em>${escapeHtml(data.metric_label.toLowerCase())}</em> &mdash; <span class="num">${escapeHtml(fmtValue(leader.value, unit))}</span>`;
-    if (ranked.length > 2) headline += ` (best of ${ranked.length} counties)`;
-    headline += `. <span style="color:${trailer.ink}"><strong>${escapeHtml(trailer.label.replace(/,.*$/, ''))}</strong></span> comes last at <span class="num">${escapeHtml(fmtValue(trailer.value, unit))}</span> &mdash; a <span class="num">${pct.toFixed(0)}%</span> gap.`;
-  } else {
-    headline = `<em>${escapeHtml(data.metric_label)}</em> across ${ranked.length} counties: `;
-    headline += ranked.map(r => `<span style="color:${r.ink}"><strong>${escapeHtml(r.short)}</strong> <span class="num">${escapeHtml(fmtValue(r.value, unit))}</span></span>`).join(', ') + '.';
-  }
-  if (tkw) tkw.innerHTML = headline;
-
-  const auxBits = [];
-  if (ranked.every(r => r.peak)) {
-    auxBits.push('Peaks: ' + ranked.slice(0, Math.min(4, ranked.length)).map(r =>
-      `<span style="color:${r.ink}">${escapeHtml(r.short)} hit <span class="num">${escapeHtml(fmtValue(r.peak.y, unit))}</span> in ${escapeHtml(prettyBucket(r.peak.x, data.grain))}</span>`
-    ).join(' · ') + '.');
-  }
-  if (metric === 'stay_outside_hours' && higherBetter) {
-    const days = spread / 8;
-    if (days >= 1) auxBits.push(`Gap between leader and last: roughly <span class="num">${days.toFixed(0)}</span> extra outdoor-friendly days.`);
-  }
-  if (auxEl) auxEl.innerHTML = auxBits.join(' ');
-}
-
-function renderHeroStats(ranked, unit, hasDirection) {
-  const host = document.getElementById('hero-stats');
-  if (!host) return;
-  host.innerHTML = '';
-  ranked.forEach((r, i) => {
-    const c = document.createElement('div');
-    c.className = 'stat';
-    c.style.borderTop = `3px solid ${r.color}`;
-    if (hasDirection && i === 0 && ranked.length >= 2) c.classList.add('stat-leader');
-    c.innerHTML = `
-      <span class="stat-value">${escapeHtml(fmtValue(r.value, unit))}</span>
-      <span class="stat-label" style="color:${r.ink}">${escapeHtml(r.label.replace(/\s*County/, ''))}${hasDirection && i === 0 && ranked.length >= 2 ? ' ★' : ''}</span>
-    `;
-    host.appendChild(c);
-  });
-  const range = document.createElement('div');
-  range.className = 'stat stat-range';
-  const rangeDef = RANGE_ORDER.find(x => x.tag === state.tag);
-  range.innerHTML = `<span class="stat-value">${escapeHtml(rangeDef ? rangeDef.label : state.tag)}</span><span class="stat-label">Time range</span>`;
-  host.appendChild(range);
 }
 
 // ---- detail panel ------------------------------------------------------
