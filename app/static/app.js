@@ -1,3 +1,5 @@
+import { escapeHtml, fmtValue, prettyBucket, toBucket, fmtCell, cellClass } from './js/format.js';
+
 // Friendly ordered list of ranges the UI surfaces. Unknown server tags still
 // show up at the end of the picker.
 const RANGE_ORDER = [
@@ -109,7 +111,7 @@ function renderRegionPicker() {
     chip.style.setProperty('--chip-halo', `${reg.color}33`);
     chip.style.setProperty('--chip-bg', `${reg.color}11`);
     chip.dataset.region = region;
-    chip.innerHTML = `<span class="dot"></span>${reg.label}${reg.default_on ? '' : ' <span class="chip-mute">(tap to compare)</span>'}`;
+    chip.innerHTML = `<span class="dot"></span>${escapeHtml(reg.label)}${reg.default_on ? '' : ' <span class="chip-mute">(tap to compare)</span>'}`;
     if (state.regionsOn.has(region)) chip.classList.add('active');
     chip.addEventListener('click', () => {
       if (state.regionsOn.has(region)) {
@@ -130,7 +132,7 @@ function layoutFor(meta, grain) {
   const inter = 'Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
   return {
     title: {
-      text: `${meta.metric_label}  <span style="color:#6b7388;font-weight:500">per ${grainLabel.toLowerCase()}</span>`,
+      text: `${escapeHtml(meta.metric_label)}  <span style="color:#6b7388;font-weight:500">per ${grainLabel.toLowerCase()}</span>`,
       font: { family: inter, size: 26, color: '#121726', weight: 800 },
       x: 0.02, xanchor: 'left', y: 0.96,
     },
@@ -159,7 +161,7 @@ function layoutFor(meta, grain) {
     annotations: [
       {
         xref: 'paper', yref: 'paper', x: 0.015, y: 1.12, xanchor: 'left', yanchor: 'bottom',
-        text: `<span style="color:#6b7388">${meta.tag}</span>  ·  <span style="color:#6b7388">${grain}</span>  ·  <code style="color:#4055f1">${meta.metric}</code>`,
+        text: `<span style="color:#6b7388">${escapeHtml(meta.tag)}</span>  ·  <span style="color:#6b7388">${escapeHtml(grain)}</span>  ·  <code style="color:#4055f1">${escapeHtml(meta.metric)}</code>`,
         showarrow: false, font: { size: 11, family: inter },
       },
     ],
@@ -183,7 +185,7 @@ async function refresh() {
         marker: { size: grain === 'yearly' ? 11 : 7, color: regionColor(region), line: { width: 1, color: 'white' } },
         line: { width: 3, color: regionColor(region) },
         meta: region,
-        hovertemplate: `<b>${s.label}</b><br>%{x}<br>${data.metric_label}: %{y:.2f} ${data.unit}<br><i>(click to drill in)</i><extra></extra>`,
+        hovertemplate: `<b>${escapeHtml(s.label)}</b><br>%{x}<br>${escapeHtml(data.metric_label)}: %{y:.2f} ${escapeHtml(data.unit)}<br><i>(click to drill in)</i><extra></extra>`,
       };
     });
 
@@ -220,13 +222,6 @@ function regionSummary(ys, kind) {
   return { value: vals.reduce((a, b) => a + b, 0) / vals.length, kind };
 }
 
-function fmtValue(v, unit) {
-  if (v == null) return '—';
-  const abs = Math.abs(v);
-  const digits = abs >= 1000 ? 0 : abs >= 100 ? 0 : abs >= 10 ? 1 : 2;
-  return `${v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${unit || ''}`.trim();
-}
-
 function verbForKind(kind) {
   return { sum: 'added up to', max: 'peaked at', pct: 'averaged', mean: 'averaged' }[kind] || 'came in at';
 }
@@ -243,16 +238,6 @@ function findExtremes(xs, ys) {
     hi: hiI >= 0 ? { x: xs[hiI], y: hi } : null,
     lo: loI >= 0 ? { x: xs[loI], y: lo } : null,
   };
-}
-
-function prettyBucket(x, grain) {
-  if (grain === 'yearly') return String(x);
-  // ISO 2025-03-29 → "Mar 29, 2025" (daily) or "Mar 2025" (monthly)
-  const m = String(x).match(/^(\d{4})-(\d{2})(?:-(\d{2}))?/);
-  if (!m) return String(x);
-  const year = +m[1], month = +m[2] - 1, day = m[3] ? +m[3] : null;
-  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return day ? `${monthNames[month]} ${day}, ${year}` : `${monthNames[month]} ${year}`;
 }
 
 const HIGHER_BETTER = new Set(['stay_outside_hours', 'pct_daytime_outside', 'sunshine_hours']);
@@ -292,7 +277,7 @@ function updateTakeaway(data, meta, visible) {
   }
 
   if (ranked.length < 2) {
-    if (tkw) tkw.innerHTML = `<em>${data.metric_label}</em> shown for ${ranked.length ? ranked[0].label : 'no counties'}. Toggle another county above to compare.`;
+    if (tkw) tkw.innerHTML = `<em>${escapeHtml(data.metric_label)}</em> shown for ${ranked.length ? escapeHtml(ranked[0].label) : 'no counties'}. Toggle another county above to compare.`;
     if (auxEl) auxEl.innerHTML = '';
     return;
   }
@@ -305,19 +290,19 @@ function updateTakeaway(data, meta, visible) {
   let headline;
   const verb = lowerBetter ? 'the least' : higherBetter ? 'the most' : null;
   if (verb) {
-    headline = `<span style="color:${leader.ink}"><strong>${leader.label.replace(/,.*$/, '')}</strong></span> has ${verb} <em>${data.metric_label.toLowerCase()}</em> &mdash; <span class="num">${fmtValue(leader.value, unit)}</span>`;
+    headline = `<span style="color:${leader.ink}"><strong>${escapeHtml(leader.label.replace(/,.*$/, ''))}</strong></span> has ${verb} <em>${escapeHtml(data.metric_label.toLowerCase())}</em> &mdash; <span class="num">${escapeHtml(fmtValue(leader.value, unit))}</span>`;
     if (ranked.length > 2) headline += ` (best of ${ranked.length} counties)`;
-    headline += `. <span style="color:${trailer.ink}"><strong>${trailer.label.replace(/,.*$/, '')}</strong></span> comes last at <span class="num">${fmtValue(trailer.value, unit)}</span> &mdash; a <span class="num">${pct.toFixed(0)}%</span> gap.`;
+    headline += `. <span style="color:${trailer.ink}"><strong>${escapeHtml(trailer.label.replace(/,.*$/, ''))}</strong></span> comes last at <span class="num">${escapeHtml(fmtValue(trailer.value, unit))}</span> &mdash; a <span class="num">${pct.toFixed(0)}%</span> gap.`;
   } else {
-    headline = `<em>${data.metric_label}</em> across ${ranked.length} counties: `;
-    headline += ranked.map(r => `<span style="color:${r.ink}"><strong>${r.short}</strong> <span class="num">${fmtValue(r.value, unit)}</span></span>`).join(', ') + '.';
+    headline = `<em>${escapeHtml(data.metric_label)}</em> across ${ranked.length} counties: `;
+    headline += ranked.map(r => `<span style="color:${r.ink}"><strong>${escapeHtml(r.short)}</strong> <span class="num">${escapeHtml(fmtValue(r.value, unit))}</span></span>`).join(', ') + '.';
   }
   if (tkw) tkw.innerHTML = headline;
 
   const auxBits = [];
   if (ranked.every(r => r.peak)) {
     auxBits.push('Peaks: ' + ranked.slice(0, Math.min(4, ranked.length)).map(r =>
-      `<span style="color:${r.ink}">${r.short} hit <span class="num">${fmtValue(r.peak.y, unit)}</span> in ${prettyBucket(r.peak.x, data.grain)}</span>`
+      `<span style="color:${r.ink}">${escapeHtml(r.short)} hit <span class="num">${escapeHtml(fmtValue(r.peak.y, unit))}</span> in ${escapeHtml(prettyBucket(r.peak.x, data.grain))}</span>`
     ).join(' · ') + '.');
   }
   if (metric === 'stay_outside_hours' && higherBetter) {
@@ -337,66 +322,23 @@ function renderHeroStats(ranked, unit, hasDirection) {
     c.style.borderTop = `3px solid ${r.color}`;
     if (hasDirection && i === 0 && ranked.length >= 2) c.classList.add('stat-leader');
     c.innerHTML = `
-      <span class="stat-value">${fmtValue(r.value, unit)}</span>
-      <span class="stat-label" style="color:${r.ink}">${r.label.replace(/\s*County/, '')}${hasDirection && i === 0 && ranked.length >= 2 ? ' ★' : ''}</span>
+      <span class="stat-value">${escapeHtml(fmtValue(r.value, unit))}</span>
+      <span class="stat-label" style="color:${r.ink}">${escapeHtml(r.label.replace(/\s*County/, ''))}${hasDirection && i === 0 && ranked.length >= 2 ? ' ★' : ''}</span>
     `;
     host.appendChild(c);
   });
   const range = document.createElement('div');
   range.className = 'stat stat-range';
   const rangeDef = RANGE_ORDER.find(x => x.tag === state.tag);
-  range.innerHTML = `<span class="stat-value">${rangeDef ? rangeDef.label : state.tag}</span><span class="stat-label">Time range</span>`;
+  range.innerHTML = `<span class="stat-value">${escapeHtml(rangeDef ? rangeDef.label : state.tag)}</span><span class="stat-label">Time range</span>`;
   host.appendChild(range);
-}
-
-function toBucket(x, grain) {
-  // Values come from data.x (strings for daily/monthly ISO, ints for yearly).
-  if (grain === 'yearly') return String(parseInt(x, 10));
-  // ISO date strings like "2026-03-29" or "2026-03-01" pass through.
-  return String(x).slice(0, 10);
 }
 
 // ---- detail panel ------------------------------------------------------
 
-const FMT = {
-  num0: (v) => v == null ? '' : Number(v).toFixed(0),
-  num1: (v) => v == null ? '' : Number(v).toFixed(1),
-  num2: (v) => v == null ? '' : Number(v).toFixed(2),
-  time: (v) => {
-    if (v == null) return '';
-    const m = String(v).match(/T(\d{2}:\d{2})/);
-    return m ? m[1] : String(v);
-  },
-  bool: (v) => {
-    if (v == null || v === '') return '';
-    const n = Number(v);
-    return `<span class="${n ? 'yes' : 'no'}">${n ? '✓' : '✗'}</span>`;
-  },
-  // "N / 3" score with color hint — used for hourly stay_outside_pts (0..3).
-  pts: (v, max = 3) => {
-    if (v == null) return '';
-    const n = Number(v);
-    const cls = n === 0 ? 'no' : n === max ? 'yes' : 'partial';
-    return `<span class="${cls}">${n}/${max}</span>`;
-  },
-};
-
 const REGION_ORDER_DEFAULT = ['santa_clara_ca', 'eastside_king_wa'];
 const REGION_CLASS = { santa_clara_ca: 'col-scc', eastside_king_wa: 'col-king' };
 const REGION_SHORT = { santa_clara_ca: 'SCC', eastside_king_wa: 'WA' };
-
-function fmtCell(val, fmt) {
-  if (fmt === 'bool') return FMT.bool(val);
-  if (fmt === 'pts')  return FMT.pts(val);
-  if (fmt && FMT[fmt]) return FMT[fmt](val);
-  return val == null ? '' : String(val);
-}
-
-function cellClass(fmt) {
-  if (fmt === 'bool' || fmt === 'pts') return 'bool';
-  if (fmt && fmt.startsWith('num')) return 'num';
-  return '';
-}
 
 // Winner highlighting for the leading classification metric.
 function leadingWinner(row, key, regionOrder, higherIsBetter = true) {
@@ -426,14 +368,14 @@ function renderPairedTable(columns, rows, regions, order) {
   let bottomHead = '';
   ordered.forEach((c, i) => {
     if (!c.paired) {
-      topHead += `<th rowspan="2" class="shared-hdr">${c.label}</th>`;
+      topHead += `<th rowspan="2" class="shared-hdr">${escapeHtml(c.label)}</th>`;
       return;
     }
     // Classification leaders get a highlighted top-group (both regions under one banner).
     const groupCls = c.leading ? 'hdr-lead' : '';
-    topHead += `<th colspan="${regionOrder.length}" class="group-hdr ${groupCls}"><span class="group-title">${c.label}</span></th>`;
+    topHead += `<th colspan="${regionOrder.length}" class="group-hdr ${groupCls}"><span class="group-title">${escapeHtml(c.label)}</span></th>`;
     regionOrder.forEach(r => {
-      bottomHead += `<th class="${REGION_CLASS[r]} ${c.leading ? 'hdr-lead-sub' : ''}"><span class="dot dot-${r === 'santa_clara_ca' ? 'scc' : 'king'}"></span>${REGION_SHORT[r]}</th>`;
+      bottomHead += `<th class="${REGION_CLASS[r]} ${c.leading ? 'hdr-lead-sub' : ''}"><span class="dot dot-${r === 'santa_clara_ca' ? 'scc' : 'king'}"></span>${escapeHtml(REGION_SHORT[r] ?? r)}</th>`;
     });
   });
 
@@ -490,7 +432,7 @@ async function drillUp(toIndex) {
 function renderBreadcrumb() {
   const crumbs = drillStack.map((s, i) => {
     const last = i === drillStack.length - 1;
-    const label = `${s.xLabel}<span class="crumb-grain"> · ${s.grain}</span>`;
+    const label = `${escapeHtml(s.xLabel)}<span class="crumb-grain"> · ${escapeHtml(s.grain)}</span>`;
     return last
       ? `<span class="crumb crumb-here">${label}</span>`
       : `<button class="crumb crumb-link" data-i="${i}">${label}</button>`;
@@ -516,17 +458,17 @@ async function loadDetailLevel() {
     }
     let note;
     if (d.detail_grain === 'hourly') {
-      note = `<p class="detail-hint">${d.n_rows} hourly rows. <strong>Stay-out</strong> = how many of the 3 sample neighborhoods passed <em>all four</em> rules that hour. The columns to the right show the <em>reason</em> — daytime, temperature, UV, rain — so you can see which rule killed the hour. Winner highlighted per row.</p>`;
+      note = `<p class="detail-hint">${escapeHtml(d.n_rows)} hourly rows. <strong>Stay-out</strong> = how many of the 3 sample neighborhoods passed <em>all four</em> rules that hour. The columns to the right show the <em>reason</em> — daytime, temperature, UV, rain — so you can see which rule killed the hour. Winner highlighted per row.</p>`;
     } else {
       const canDrill = d.detail_grain === 'daily' || d.detail_grain === 'monthly';
-      note = `<p class="detail-hint">${d.n_rows} ${d.detail_grain} rows, both counties side by side. Classification columns lead; winner starred.${canDrill ? ' <strong>Click any row</strong> to drop down to the ' + (d.detail_grain === 'daily' ? 'hour-by-hour' : 'day-by-day') + ' view.' : ''}</p>`;
+      note = `<p class="detail-hint">${escapeHtml(d.n_rows)} ${escapeHtml(d.detail_grain)} rows, both counties side by side. Classification columns lead; winner starred.${canDrill ? ' <strong>Click any row</strong> to drop down to the ' + (d.detail_grain === 'daily' ? 'hour-by-hour' : 'day-by-day') + ' view.' : ''}</p>`;
     }
     el('detail-body').innerHTML = renderBreadcrumb() + note + renderPairedTable(d.columns, d.rows, d.regions, d.region_order);
 
     wireCrumbs();
     wireRowDrill(d);
   } catch (err) {
-    el('detail-body').innerHTML = renderBreadcrumb() + `<p class="detail-empty">Failed to load detail: ${err.message}</p>`;
+    el('detail-body').innerHTML = renderBreadcrumb() + `<p class="detail-empty">Failed to load detail: ${escapeHtml(err.message)}</p>`;
     wireCrumbs();
   }
 }
