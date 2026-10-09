@@ -1,0 +1,131 @@
+# Tracked regions and their sample points. Loaded by etl/points.py.
+# Palette chosen for colorblind safety (Wong palette).
+regions:
+  santa_clara_ca:
+    label: "Santa Clara County, CA"
+    short: "SCC"
+    color: "#e45c3a"
+    ink: "#b43f21"
+    default_on: true
+    description: "Santa Clara County, CA — South Bay suburbs"
+    points:
+      - {id: san_jose, name: "San Jose", lat: 37.3382, lon: -121.8863, elevation_m: 25, timezone: America/Los_Angeles}
+      - {id: palo_alto, name: "Palo Alto", lat: 37.4419, lon: -122.143, elevation_m: 9, timezone: America/Los_Angeles}
+      - {id: morgan_hill, name: "Morgan Hill", lat: 37.1305, lon: -121.6544, elevation_m: 108, timezone: America/Los_Angeles}
+  eastside_king_wa:
+    label: "Eastside King County, WA"
+    short: "WA"
+    color: "#0e8f74"
+    ink: "#096a56"
+    default_on: true
+    description: "Eastside King County, WA — Seattle suburbs east of the lake"
+    points:
+      - {id: bellevue, name: "Bellevue", lat: 47.6101, lon: -122.2015, elevation_m: 37, timezone: America/Los_Angeles}
+      - {id: redmond, name: "Redmond", lat: 47.674, lon: -122.1215, elevation_m: 22, timezone: America/Los_Angeles}
+      - {id: woodinville, name: "Woodinville", lat: 47.754, lon: -122.1635, elevation_m: 46, timezone: America/Los_Angeles}
+  san_francisco_ca:
+    label: "San Francisco, CA"
+    short: "SF"
+    color: "#8e54c4"
+    ink: "#6d2d85"
+    default_on: false
+    description: "San Francisco, CA — three distinct microclimates (foggy west vs sunny east)"
+    points:
+      - {id: mission_sf, name: "Mission Dist.", lat: 37.7599, lon: -122.4148, elevation_m: 30, timezone: America/Los_Angeles}
+      - {id: pacific_hts_sf, name: "Pacific Heights", lat: 37.7923, lon: -122.4326, elevation_m: 90, timezone: America/Los_Angeles}
+      - {id: ocean_beach_sf, name: "Ocean Beach", lat: 37.7594, lon: -122.5107, elevation_m: 10, timezone: America/Los_Angeles}
+  snohomish_wa:
+    label: "Snohomish County, WA"
+    short: "SNO"
+    color: "#cc8a1a"
+    ink: "#8a5b0e"
+    default_on: false
+    description: "Snohomish County, WA — Puget Sound north of Seattle"
+    points:
+      - {id: everett, name: "Everett", lat: 47.979, lon: -122.2021, elevation_m: 18, timezone: America/Los_Angeles}
+      - {id: mill_creek, name: "Mill Creek", lat: 47.8601, lon: -122.2043, elevation_m: 140, timezone: America/Los_Angeles}
+      - {id: edmonds, name: "Edmonds", lat: 47.8107, lon: -122.3775, elevation_m: 17, timezone: America/Los_Angeles}
+  charlotte_fl:
+    label: "Charlotte County, FL"
+    short: "FL"
+    color: "#ec4899"
+    ink: "#a12553"
+    default_on: false
+    description: "Charlotte County, FL — Gulf Coast, Punta Gorda area"
+    points:
+      - {id: punta_gorda, name: "Punta Gorda", lat: 26.9298, lon: -82.0454, elevation_m: 3, timezone: America/New_York}
+      - {id: port_charlotte, name: "Port Charlotte", lat: 26.9762, lon: -82.0907, elevation_m: 3, timezone: America/New_York}
+      - {id: englewood_fl, name: "Englewood", lat: 26.9617, lon: -82.3528, elevation_m: 3, timezone: America/New_York}
+  albemarle_va:
+    label: "Albemarle County, VA"
+    short: "VA"
+    color: "#16a34a"
+    ink: "#0f6d31"
+    default_on: false
+    description: "Albemarle County, VA — Blue Ridge foothills, contains Charlottesville"
+    points:
+      - {id: charlottesville, name: "Charlottesville", lat: 38.0293, lon: -78.4767, elevation_m: 177, timezone: America/New_York}
+      - {id: crozet, name: "Crozet", lat: 38.0718, lon: -78.6961, elevation_m: 180, timezone: America/New_York}
+      - {id: earlysville, name: "Earlysville", lat: 38.1251, lon: -78.5003, elevation_m: 167, timezone: America/New_York}
+  westchester_ny:
+    label: "Westchester County, NY"
+    short: "NY"
+    color: "#3b82f6"
+    ink: "#1d4ed8"
+    default_on: false
+    description: "Westchester County, NY — affluent NYC suburb along the Hudson"
+    points:
+      - {id: white_plains, name: "White Plains", lat: 41.034, lon: -73.7629, elevation_m: 75, timezone: America/New_York}
+      - {id: scarsdale, name: "Scarsdale", lat: 40.989, lon: -73.7807, elevation_m: 92, timezone: America/New_York}
+      - {id: yonkers, name: "Yonkers", lat: 40.9312, lon: -73.8987, elevation_m: 10, timezone: America/New_York}
+  maui_hi:
+    label: "Maui County, HI"
+    short: "HI"
+    color: "#06b6d4"
+    ink: "#0e7490"
+    default_on: false
+    description: "Maui County, HI — tropical, three distinct shores (central / south-sunny / west)"
+    points:
+      - {id: kahului, name: "Kahului", lat: 20.8893, lon: -156.4729, elevation_m: 8, timezone: Pacific/Honolulu}
+      - {id: kihei, name: "Kihei", lat: 20.7644, lon: -156.4456, elevation_m: 9, timezone: Pacific/Honolulu}
+      - {id: lahaina, name: "Lahaina", lat: 20.8783, lon: -156.6825, elevation_m: 9, timezone: Pacific/Honolulu}
+  st_johns_fl:
+    label: "St. Johns County, FL"
+    short: "STA"
+    color: "#f59e0b"
+    ink: "#a26508"
+    default_on: false
+    description: "St. Johns County, FL — Atlantic coast north of Daytona, contains St. Augustine"
+    points:
+      - {id: st_augustine, name: "St. Augustine", lat: 29.9012, lon: -81.3124, elevation_m: 3, timezone: America/New_York}
+      - {id: ponte_vedra, name: "Ponte Vedra Bch", lat: 30.2394, lon: -81.3856, elevation_m: 3, timezone: America/New_York}
+      - {id: st_johns_town, name: "St. Johns", lat: 30.1372, lon: -81.535, elevation_m: 9, timezone: America/New_York}
+  sofia_bg:
+    label: "Sofia, Bulgaria"
+    short: "SOF"
+    color: "#64748b"
+    ink: "#334155"
+    default_on: false
+    description: "Sofia, Bulgaria — capital city, single point at the center"
+    points:
+      - {id: sofia_center, name: "Sofia (center)", lat: 42.6977, lon: 23.3219, elevation_m: 550, timezone: Europe/Sofia}
+  miami_dade_fl:
+    label: "Miami-Dade County, FL"
+    short: "MIA"
+    color: "#14b8a6"
+    ink: "#0f766e"
+    default_on: false
+    description: "Miami-Dade County, FL — distinct microclimates: urban core, oceanfront, inland suburb"
+    points:
+      - {id: miami_downtown, name: "Miami (downtown)", lat: 25.7617, lon: -80.1918, elevation_m: 2, timezone: America/New_York}
+      - {id: miami_beach, name: "Miami Beach", lat: 25.7907, lon: -80.13, elevation_m: 1, timezone: America/New_York}
+      - {id: coral_gables, name: "Coral Gables", lat: 25.7215, lon: -80.2684, elevation_m: 3, timezone: America/New_York}
+  gabrovo_bg:
+    label: "Gabrovo, Bulgaria"
+    short: "GAB"
+    color: "#a16207"
+    ink: "#713f12"
+    default_on: false
+    description: "Gabrovo, Bulgaria — central Balkan town, single point at the center"
+    points:
+      - {id: gabrovo_center, name: "Gabrovo (center)", lat: 42.8742, lon: 25.3194, elevation_m: 370, timezone: Europe/Sofia}
