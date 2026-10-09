@@ -1,6 +1,7 @@
 import { escapeHtml, fmtValue, toBucket } from './js/format.js';
 import { createDetailPanel } from './js/detail.js';
 import { buildTraces, layoutFor, renderChart, clearChart } from './js/chart.js';
+import { heroRegions, rulesFromProfile } from './js/copy.js';
 import { buildTakeaway, renderTakeaway, renderHeroStats } from './js/takeaway.js';
 
 // Friendly ordered list of ranges the UI surfaces. Unknown server tags still
@@ -69,6 +70,27 @@ async function loadCatalogs() {
   renderRangePicker();
   renderRegionPicker();
   el('tag-badge').textContent = `dataset: ${state.tag}`;
+  renderHeroEyebrow();
+  renderRules(metricsResp.default_profile?.rule);
+}
+
+function renderHeroEyebrow() {
+  const dots = heroRegions(state.regionRegistry, state.regionOrder).map(r =>
+    `<span class="dot" style="--region-color:${escapeHtml(r.color)}"></span> ${escapeHtml(r.label)}`);
+  const sep = dots.length === 2 ? ' <span class="vs">vs.</span> ' : ', ';
+  el('hero-eyebrow').innerHTML = dots.join(sep);
+}
+
+function renderRules(rule) {
+  const rules = rulesFromProfile(rule);
+  el('rules-grid').innerHTML = rules.map(r =>
+    `<li class="rule ${escapeHtml(r.cls)}">` +
+      `<div class="rule-ico">${escapeHtml(r.icon)}</div>` +
+      `<div class="rule-name">${escapeHtml(r.name)}</div>` +
+      `<div class="rule-val">${escapeHtml(r.value)}</div>` +
+      `<div class="rule-sub">${escapeHtml(r.sub)}</div></li>`
+  ).join('<li class="rule-and">AND</li>');
+  el('rules-gate-num').textContent = `${rules.length} of ${rules.length}`;
 }
 
 function renderRangePicker() {

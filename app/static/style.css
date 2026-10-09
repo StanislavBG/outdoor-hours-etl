@@ -96,8 +96,7 @@ code, .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo
 }
 .hero-eyebrow .vs { margin: 0 6px; color: var(--muted); font-weight: 500; }
 .dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
-.dot-scc { background: var(--scc); box-shadow: 0 0 0 4px rgba(228, 92, 58, 0.18); }
-.dot-king { background: var(--king); box-shadow: 0 0 0 4px rgba(14, 143, 116, 0.18); }
+.hero-eyebrow .dot { background: var(--region-color); box-shadow: 0 0 0 4px color-mix(in srgb, var(--region-color) 18%, transparent); }
 
 .hero-title {
   margin: 24px 0 16px; font-size: clamp(42px, 5.6vw, 64px); font-weight: 800;
@@ -119,8 +118,6 @@ code, .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo
 }
 .stat-value { font-size: 32px; font-weight: 800; color: var(--fg); letter-spacing: -0.025em; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .stat-label { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
-.stat.scc { border-top: 3px solid var(--scc); }
-.stat.king { border-top: 3px solid var(--king); }
 .stat.winner { background: linear-gradient(180deg, #fff, #f4f6ff); }
 .stat.stat-leader { background: linear-gradient(180deg, #fffbe8, #fff3c4); }
 .stat.stat-range { background: linear-gradient(180deg, #f7f8fb, #eef1f8); min-width: 130px; }
@@ -141,8 +138,6 @@ code, .mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo
   vertical-align: middle;
 }
 .takeaway .num { font-weight: 800; font-variant-numeric: tabular-nums; }
-.takeaway .scc { color: var(--scc-ink); }
-.takeaway .king { color: var(--king-ink); }
 .takeaway-aux { margin-top: 10px; font-size: 16px; color: var(--fg-soft); line-height: 1.5; }
 
 /* -------- CONTROLS -------- */

@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>KOUT-7 Outdoor Hours — Where is the Weather Actually Better?</title>
-  <meta name="description" content="Hourly ERA5 reanalysis, user-weighted classifier. Compare Santa Clara County, CA with Eastside King County, WA on stay-outside hours, UV, precipitation and more." />
+  <title>KOUT-7 Outdoor Hours — Where is the weather actually better?</title>
+  <meta name="description" content="Hourly ERA5 reanalysis, user-weighted classifier. Compare regions on stay-outside hours, UV, precipitation and more." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
@@ -25,15 +25,11 @@
 
   <header class="hero">
     <div class="hero-inner">
-      <div class="hero-eyebrow">
-        <span class="dot dot-scc"></span> Santa Clara County, CA
-        <span class="vs">vs.</span>
-        <span class="dot dot-king"></span> Eastside King County, WA
-      </div>
+      <div id="hero-eyebrow" class="hero-eyebrow"></div>
       <h1 class="hero-title">Where is the weather <span class="grad">actually</span> better?</h1>
       <p class="hero-sub">
-        We counted every hour of the last three years and asked one simple question &mdash; <em>was it comfortable to be outside?</em>
-        This dashboard turns those hours into totals you can compare, month by month, between the Bay Area and the Seattle Eastside.
+        We scored every hour in the selected time range and asked one simple question &mdash; <em>was it comfortable to be outside?</em>
+        This dashboard turns those hours into totals you can compare, month by month, between regions.
         Click any dot on the chart to see the actual hours that made the number.
       </p>
       <div id="hero-stats" class="hero-stats"></div>
@@ -61,8 +57,8 @@
       </label>
     </div>
     <div class="ctrl-row region-row">
-      <span class="ctrl-label">Compare counties</span>
-      <div id="region-picker" class="region-picker" role="group" aria-label="Counties to compare"></div>
+      <span class="ctrl-label">Compare regions</span>
+      <div id="region-picker" class="region-picker" role="group" aria-label="Regions to compare"></div>
       <span class="ctrl-hint">Tip: click a dot to drill into the hours behind it.</span>
     </div>
   </section>
@@ -70,44 +66,16 @@
   <section class="rules" aria-label="What counts as a good-outdoor hour">
     <header class="rules-hdr">
       <div>
-        <div class="rules-eyebrow">The Four Rules</div>
+        <div class="rules-eyebrow">The Rules</div>
         <h2 class="rules-title">What counts as a comfortable hour?</h2>
       </div>
       <div class="rules-gate">
-        <span class="rules-gate-num">4 of 4</span>
+        <span id="rules-gate-num" class="rules-gate-num"></span>
         <span class="rules-gate-label">must pass<br>for the hour to count</span>
       </div>
     </header>
-    <ol class="rules-grid">
-      <li class="rule rule-sun">
-        <div class="rule-ico">&#9728;</div>
-        <div class="rule-name">Daytime</div>
-        <div class="rule-val">Sun is up</div>
-        <div class="rule-sub">Nighttime hours don&rsquo;t count.</div>
-      </li>
-      <li class="rule-and">AND</li>
-      <li class="rule rule-temp">
-        <div class="rule-ico">&#127777;</div>
-        <div class="rule-name">Comfortable temp</div>
-        <div class="rule-val">45&deg;&ndash;86&deg;F</div>
-        <div class="rule-sub">That&rsquo;s 7&deg;&ndash;30&deg;C &mdash; not too cold, not too hot.</div>
-      </li>
-      <li class="rule-and">AND</li>
-      <li class="rule rule-uv">
-        <div class="rule-ico">&#9925;</div>
-        <div class="rule-name">Safe UV</div>
-        <div class="rule-val">Index &le; 6</div>
-        <div class="rule-sub">Above 6 and dermatologists say cover up.</div>
-      </li>
-      <li class="rule-and">AND</li>
-      <li class="rule rule-rain">
-        <div class="rule-ico">&#9730;</div>
-        <div class="rule-name">Barely raining</div>
-        <div class="rule-val">&le; 1 mm/hr</div>
-        <div class="rule-sub">Light drizzle is OK &mdash; a real downpour isn&rsquo;t.</div>
-      </li>
-    </ol>
-    <p class="rules-foot">Each county is the average of three sample neighborhoods. Every hour is scored independently.</p>
+    <ol id="rules-grid" class="rules-grid"></ol>
+    <p class="rules-foot">Each region is the average of its sample points. Every hour is scored independently.</p>
   </section>
 
   <main id="chart" class="chart-card"></main>
@@ -133,13 +101,13 @@
       <h3>How to read the chart</h3>
       <ul>
         <li><strong>Each dot is a block of time</strong> &mdash; a day, a month, or a year depending on what you picked above.</li>
-        <li><strong>Good-for-outdoors hours</strong> is a simple tally: how many hours in that block passed the four-rule check (sunny-enough, comfortable, safe UV, not pouring).</li>
-        <li>Click any dot to see the <strong>actual hours behind it</strong>. On a day, we show all 24 hours from each of the 3 sample neighborhoods so you can see exactly when the weather turned.</li>
+        <li><strong>Good-for-outdoors hours</strong> is a simple tally: how many hours in that block passed every rule listed above.</li>
+        <li>Click any dot to see the <strong>actual hours behind it</strong>. On a day, we show all 24 hours from each of the region&rsquo;s sample points so you can see exactly when the weather turned.</li>
       </ul>
       <h3 class="nm">Where the numbers come from</h3>
       <ul>
         <li>We use <strong>hourly historical weather data</strong> from the global ERA5 record &mdash; the same archive meteorologists use for climate analysis, updated to within about five days of today.</li>
-        <li>Each county is represented by <strong>three neighborhoods</strong> (San Jose / Sunnyvale / Mountain View in CA; Bellevue / Redmond / Woodinville in WA), then averaged.</li>
+        <li>Each region is <strong>the average of its sample points</strong>.</li>
         <li>UV is estimated from the sun&rsquo;s angle and cloud cover &mdash; close to what a consumer UV index would report, but not a direct sensor reading.</li>
       </ul>
     </div>
