@@ -25,6 +25,7 @@ import yaml
 
 from etl.points import POINTS, Point
 from etl.sources import _client
+from etl.sources._client import FetchBodyError, RateLimitExhausted  # noqa: F401  (re-exported)
 
 ROOT = Path(__file__).resolve().parents[2]
 RAW_DIR = ROOT / "data" / "raw" / "open_meteo"

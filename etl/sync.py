@@ -78,7 +78,7 @@ def missing_ranges(covered, start: date, end: date) -> list[tuple[date, date]]:
     return gaps
 
 
-def plan_tasks(points, sources, target: date) -> list[Task]:
+def plan_tasks(points, sources, target: date, piece_days: int = PIECE_DAYS) -> list[Task]:
     tasks: list[Task] = []
     for source in sources:
         for p in points:
@@ -86,7 +86,7 @@ def plan_tasks(points, sources, target: date) -> list[Task]:
             for gs, ge in missing_ranges(covered_ranges(pdir), _window_start(source), target):
                 cur = gs
                 while cur <= ge:
-                    nxt = min(cur + timedelta(days=PIECE_DAYS - 1), ge)
+                    nxt = min(cur + timedelta(days=piece_days - 1), ge)
                     tasks.append(Task(source, p, cur, nxt))
                     cur = nxt + timedelta(days=1)
     return tasks
@@ -104,6 +104,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--check", action="store_true", help="exit 1 and list gaps if any, never fetches")
     ap.add_argument("--max-requests", type=int, default=None, help="stop cleanly after N fetches")
     ap.add_argument("--delay", type=float, default=8.0, help="seconds between requests")
+    ap.add_argument("--piece-days", type=int, default=PIECE_DAYS,
+                    help="max days per request/file (default %(default)s)")
     ap.add_argument("--target", type=date.fromisoformat, default=None,
                     help="YYYY-MM-DD (default today - LAG_DAYS)")
     args = ap.parse_args(argv)
@@ -119,7 +121,10 @@ def main(argv: list[str] | None = None) -> int:
         points = [p for p in POINTS if p.id in set(args.points)]
     sources = SOURCES if args.source == "all" else (args.source,)
 
-    tasks = plan_tasks(points, sources, target)
+    if args.piece_days < 1:
+        print("--piece-days must be >= 1", file=sys.stderr)
+        return 2
+    tasks = plan_tasks(points, sources, target, args.piece_days)
 
     if args.check:
         if tasks:
@@ -143,7 +148,10 @@ def main(argv: list[str] | None = None) -> int:
         download = om.download if t.source == "weather" else aq.download
         try:
             download(t.point, t.start, t.end, tag=TAG,
-                     max_days_per_call=PIECE_DAYS, inter_call_delay_s=args.delay)
+                     max_days_per_call=args.piece_days, inter_call_delay_s=args.delay)
+        except om.RateLimitExhausted as e:
+            print(f"RATE_LIMITED: {_fmt(t)}: {e} — rerun after quota reset")
+            return 75
         except Exception as e:
             print(f"HALT: {_fmt(t)}: {e} — rerun to resume")
             return 1

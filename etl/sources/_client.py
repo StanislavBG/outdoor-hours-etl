@@ -17,6 +17,32 @@ DEFAULT_RETRY_AFTER_S = 60
 REQUEST_TIMEOUT_S = 180
 
 
+class FetchBodyError(Exception):
+    """A 2xx response whose body is empty, not JSON, or an Open-Meteo error payload. Retried."""
+
+
+class RateLimitExhausted(Exception):
+    """Open-Meteo reported its request quota as exhausted. Never retried: it will not clear in backoff."""
+
+
+def _parse_body(r: httpx.Response) -> dict:
+    ctype = r.headers.get("Content-Type", "")
+    try:
+        payload = r.json()
+    except ValueError:
+        raise FetchBodyError(
+            f"unparseable body: status={r.status_code} content-type={ctype!r} body={r.text[:200]!r}"
+        ) from None
+    if isinstance(payload, dict) and payload.get("error"):
+        reason = str(payload.get("reason", ""))
+        if "limit" in reason.lower():
+            raise RateLimitExhausted(reason)
+        raise FetchBodyError(
+            f"error body: status={r.status_code} content-type={ctype!r} reason={reason or r.text[:200]!r}"
+        )
+    return payload
+
+
 def _backoff(attempt: int) -> float:
     return min(300, 8 * 2**attempt)
 
@@ -28,7 +54,10 @@ def fetch_json(
     *,
     sleep: Callable[[float], None] = time.sleep,
 ) -> dict:
-    """GET endpoint and return JSON. Retries 429, 5xx and transport errors only.
+    """GET endpoint and return JSON. Retries 429, 5xx, transport errors and bad 2xx bodies.
+
+    A 2xx body that is empty, non-JSON or `{"error": true}` raises FetchBodyError and is
+    retried; a quota "limit" reason raises RateLimitExhausted immediately.
 
     On 429 the wait is Retry-After when present, else exponential backoff (never both).
     Other 4xx raise immediately.
@@ -54,7 +83,10 @@ def fetch_json(
                 last_exc = httpx.HTTPStatusError(f"{r.status_code} server error", request=r.request, response=r)
             else:
                 r.raise_for_status()
-                return r.json()
+                try:
+                    return _parse_body(r)
+                except FetchBodyError as exc:
+                    last_exc = exc
         if attempt < MAX_ATTEMPTS - 1:
             sleep(int(wait) if float(wait).is_integer() else wait)
     assert last_exc is not None

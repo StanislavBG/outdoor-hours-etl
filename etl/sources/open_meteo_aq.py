@@ -20,6 +20,7 @@ import pandas as pd
 
 from etl.points import POINTS, Point
 from etl.sources import _client
+from etl.sources.open_meteo import FetchBodyError, RateLimitExhausted  # noqa: F401  (shared)
 
 ROOT = Path(__file__).resolve().parents[2]
 RAW_DIR = ROOT / "data" / "raw" / "open_meteo_aq"
