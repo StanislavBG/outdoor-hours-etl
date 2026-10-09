@@ -96,7 +96,7 @@ def build(tag: str) -> dict[str, Path]:
         raise SystemExit(f"missing {hourly_path}")
 
     hourly = pd.read_parquet(hourly_path)
-    hourly = apply(hourly)  # adds stay_outside, reason, temp_f
+    hourly = apply(hourly, with_reason=False)  # adds stay_outside, temp_f (reason unused here)
 
     # local calendar helpers
     hourly["local_date"] = hourly["ts_local"].dt.date

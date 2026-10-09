@@ -88,32 +88,41 @@ def stay_outside(df: pd.DataFrame) -> pd.Series:
     return stay_outside_for(df, _GOLDILOCKS)
 
 
-def reason(df: pd.DataFrame) -> pd.Series:
-    """First failing condition per row, or 'ok' if all pass — goldilocks profile."""
+def reason_for(df: pd.DataFrame, profile: Profile) -> pd.Series:
+    """First failing condition per row, or 'ok' if all pass — mirrors stay_outside_for."""
     out = pd.Series("ok", index=df.index, dtype="object")
-    night = df["is_day"].fillna(0).astype("int8") != 1
-    too_cold = df["temperature_2m"] < COLD_C
-    too_hot = df["temperature_2m"] > HOT_C
-    high_uv = df["uv_index_est"] > UV_MAX
-    too_wet = df["precipitation"].fillna(0) > RAIN_MAX_MM_H
-    too_cloudy = df["cloud_cover"].fillna(0) > OVERCAST_MAX_PCT
-    too_humid = df["relative_humidity_2m"].fillna(0) > HUMIDITY_MAX_PCT
-    out = out.mask(too_humid, "too_humid")
-    out = out.mask(too_cloudy, "too_cloudy")
-    out = out.mask(too_wet, "too_wet")
-    out = out.mask(high_uv, "uv_too_high")
-    out = out.mask(too_hot, "too_hot")
-    out = out.mask(too_cold, "too_cold")
-    out = out.mask(night, "night")
+    # Applied in reverse precedence so the first failing rule wins.
+    if profile.aqi_max is not None and "us_aqi" in df.columns:
+        aqi = df["us_aqi"]
+        out = out.mask(aqi.notna() & (aqi > profile.aqi_max), "aqi_too_high")
+    if profile.humidity_max_pct is not None:
+        out = out.mask(df["relative_humidity_2m"].fillna(0) > profile.humidity_max_pct, "too_humid")
+    if profile.overcast_max_pct is not None:
+        out = out.mask(df["cloud_cover"].fillna(0) > profile.overcast_max_pct, "too_cloudy")
+    out = out.mask(df["precipitation"].fillna(0) > profile.rain_max_mm_h, "too_wet")
+    out = out.mask(df["uv_index_est"] > profile.uv_max, "uv_too_high")
+    out = out.mask(df["temperature_2m"] > profile.hot_c, "too_hot")
+    out = out.mask(df["temperature_2m"] < profile.cold_c, "too_cold")
+    out = out.mask(df["is_day"].fillna(0).astype("int8") != 1, "night")
     return out
 
 
-def apply(df: pd.DataFrame) -> pd.DataFrame:
-    """Add stay_outside_<profile> columns + stay_outside alias + temp_f."""
+def reason(df: pd.DataFrame) -> pd.Series:
+    """Backward-compat: goldilocks-profile reason."""
+    return reason_for(df, _GOLDILOCKS)
+
+
+def apply(df: pd.DataFrame, *, with_reason: bool = True) -> pd.DataFrame:
+    """Add stay_outside_<profile> columns + stay_outside alias + temp_f.
+
+    stay_outside_reason (goldilocks) is added only when with_reason is True;
+    skip it on large frames that never read it.
+    """
     out = df.copy()
     out["temp_f"] = out["temperature_2m"] * 9.0 / 5.0 + 32.0
     for p in PROFILES:
         out[f"stay_outside_{p.id}"] = stay_outside_for(out, p)
     out["stay_outside"] = out[f"stay_outside_{DEFAULT_PROFILE_ID}"]
-    out["stay_outside_reason"] = reason(out)
+    if with_reason:
+        out["stay_outside_reason"] = reason(out)
     return out
