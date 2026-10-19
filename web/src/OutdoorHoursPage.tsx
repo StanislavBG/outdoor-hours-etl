@@ -13,9 +13,13 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { track, logError } from 'host-kit';
+import { makeTrackFlow } from './lib/flow.js';
 import { ruleItems, ruleSummary } from './lib/rules.js';
 import type { ProfileRule, RuleKey } from './lib/rules.js';
 import { DEFAULT_VIEW, RANGE_ORDER, rangeLongLabel, readInitialView, viewToParams } from './lib/view.js';
+
+const trackFlow = makeTrackFlow(track);
 
 declare global { interface Window { Plotly?: any; } }
 
@@ -412,11 +416,12 @@ export function OutdoorHoursPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      if (!window.localStorage.getItem('outdoor_hours_seen_tour_v1')) setTutorialOpen(true);
+      if (!window.localStorage.getItem('outdoor_hours_seen_tour_v1')) { setTutorialOpen(true); trackFlow('tour', 'open', { auto: true }); }
     } catch { /* private mode etc — silently skip */ }
   }, []);
   const closeTutorial = useCallback(() => {
     setTutorialOpen(false);
+    trackFlow('tour', 'finish');
     try { window.localStorage.setItem('outdoor_hours_seen_tour_v1', '1'); } catch { /* noop */ }
   }, []);
   // True until regionsOn has been seeded from URL or default_on registry — prevents
@@ -481,6 +486,7 @@ export function OutdoorHoursPage() {
         }
         setLoading(false);
       } catch (e) {
+        logError(e as Error, { where: 'payload-fetch' });
         if (!cancelled) { setError(String(e)); setLoading(false); }
       }
     };
@@ -513,6 +519,7 @@ export function OutdoorHoursPage() {
   const recomputeCustom = useCallback(async () => {
     if (!payload) return;
     setCustomComputing(true);
+    const t0 = performance.now();
     try {
       // Discover the months we need from the payload's daily x array (any region works).
       const dailyData = payload.grains.daily;
@@ -551,6 +558,10 @@ export function OutdoorHoursPage() {
       }
       setCustomResults(accum);
       setCustomComputedFor(`${tag}|${customRuleHash}`);
+      trackFlow('custom', 'recompute-done', { ms: Math.round(performance.now() - t0) });
+    } catch (e) {
+      logError(e as Error, { where: 'custom-recompute' });
+      throw e;
     } finally {
       setCustomComputing(false);
     }
@@ -561,6 +572,13 @@ export function OutdoorHoursPage() {
     if (profileId !== CUSTOM_PROFILE_ID) return;
     if (customStale && !customComputing) recomputeCustom();
   }, [profileId, customStale, customComputing, recomputeCustom]);
+
+  // Profile thresholds strip is shown for preset profiles.
+  useEffect(() => {
+    if (!payload || profileId === CUSTOM_PROFILE_ID) return;
+    if (activeProfile(payload, profileId)) trackFlow('profile', 'rules-shown', { profile: profileId });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileId, !!payload]);
 
   // Read helper alias bound to current closure (delegates to the top-level pure fn).
   const seriesFor = useCallback((region: string, mKey: string, g: Grain): (number | null)[] => {
@@ -676,7 +694,7 @@ export function OutdoorHoursPage() {
       if (!ev.points?.length || yoyActive) return;
       const p = ev.points[0];
       const rawX = p.data.x[p.pointIndex];
-      if (grain !== 'daily') openDrill(grain, rawX);
+      if (grain !== 'daily') { trackFlow('drill', 'click-point', { grain }); openDrill(grain, rawX); }
     };
     node.on?.('plotly_click', onClick);
     return () => { node.removeAllListeners?.('plotly_click'); };
@@ -701,6 +719,7 @@ export function OutdoorHoursPage() {
           setDetailResult(result);
         }
       } catch (e) {
+        logError(e as Error, { where: current.grain === 'hourly-drill' ? 'hourly-day-fetch' : 'drill-detail' });
         setDetailResult(null); setError(String(e));
       } finally {
         setDetailLoading(false);
@@ -708,6 +727,10 @@ export function OutdoorHoursPage() {
     };
     run();
   }, [drillStack, payload, regionsOn]);
+
+  useEffect(() => {
+    if (detailResult) trackFlow('drill', 'detail-shown', { rows: detailResult.rows.length });
+  }, [detailResult]);
 
   const drillFurther = useCallback((newGrain: Grain | 'hourly-drill', newBucket: string | number, newLabel: string) => {
     setDrillStack(prev => [...prev, { grain: newGrain, bucket: newBucket, xLabel: newLabel }]);
@@ -1054,7 +1077,8 @@ export function OutdoorHoursPage() {
           <span className="text-base text-[#d4d8e6]">The <strong className="text-white font-bold">Outdoor&nbsp;Hours</strong> Report</span>
           <button
             type="button"
-            onClick={() => setTutorialOpen(true)}
+            data-track="tour-open"
+            onClick={() => { setTutorialOpen(true); trackFlow('tour', 'open'); }}
             className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#2a3050] bg-[#1c2033] text-[#d4d8e6] text-xs font-bold uppercase tracking-wider hover:bg-[#262d4a] hover:text-white transition-colors"
           >
             🎓 Tour
@@ -1082,7 +1106,8 @@ export function OutdoorHoursPage() {
                   <button
                     key={p.id}
                     type="button"
-                    onClick={() => setProfileId(p.id)}
+                    data-track={`profile-${p.id}`}
+                    onClick={() => { trackFlow('profile', 'select', { profile: p.id }); setProfileId(p.id); }}
                     title={`${p.desc} — ${ruleSummary(p.rule)}`}
                     className={`px-3 py-1.5 rounded-md text-sm font-bold transition-colors ${active ? 'bg-[#121726] text-white shadow-sm' : 'text-[#39415a] hover:bg-white'}`}
                   >
@@ -1093,7 +1118,8 @@ export function OutdoorHoursPage() {
               <button
                 key="custom"
                 type="button"
-                onClick={() => setProfileId(CUSTOM_PROFILE_ID)}
+                data-track="profile-custom"
+                onClick={() => { if (profileId !== CUSTOM_PROFILE_ID) trackFlow('custom', 'open'); setProfileId(CUSTOM_PROFILE_ID); }}
                 title="Tune your own thresholds"
                 className={`px-3 py-1.5 rounded-md text-sm font-bold transition-colors ${profileId === CUSTOM_PROFILE_ID ? 'bg-[#7c3aed] text-white shadow-sm' : 'text-[#39415a] hover:bg-white'}`}
               >
@@ -1119,7 +1145,7 @@ export function OutdoorHoursPage() {
             return activeP && (
               <ProfileRulesStrip
                 rule={activeP.rule}
-                onCustomize={() => { setCustomRule({ ...activeP.rule }); setProfileId(CUSTOM_PROFILE_ID); }}
+                onCustomize={() => { trackFlow('custom', 'open'); setCustomRule({ ...activeP.rule }); setProfileId(CUSTOM_PROFILE_ID); }}
               />
             );
           })()}
@@ -1138,7 +1164,7 @@ export function OutdoorHoursPage() {
                 const active = r.tag === tag;
                 const disabled = !availableTags.has(r.tag);
                 return (
-                  <button key={r.tag} type="button" disabled={disabled}
+                  <button key={r.tag} type="button" disabled={disabled} data-track={`range-${r.tag}`}
                           title={disabled ? 'Dataset not yet available' : `Switch to ${r.label}`}
                           className={`text-sm font-semibold px-4 py-2.5 border-r border-[#e3e6ef] last:border-r-0 transition-colors tabular-nums whitespace-nowrap ${active ? 'bg-[#121726] text-white' : 'text-[#39415a] hover:bg-[#eef1f8] hover:text-[#121726]'} ${disabled ? 'opacity-35 cursor-not-allowed' : 'cursor-pointer'}`}
                           onClick={() => !disabled && !active && setTag(r.tag)}>
@@ -1148,7 +1174,7 @@ export function OutdoorHoursPage() {
               })}
             </div>
           </div>
-          <label className="flex flex-col gap-1.5 min-w-[200px]">
+          <label data-track="view-grain" className="flex flex-col gap-1.5 min-w-[200px]">
             <span className="text-xs font-bold uppercase tracking-wider text-[#6b7388]">Show by</span>
             <select className="text-base font-semibold px-4 py-3 border border-[#e3e6ef] rounded-lg bg-white text-[#121726] cursor-pointer hover:border-[#c9cedb] focus:outline-none focus:border-[#4055f1] focus:ring-2 focus:ring-[#4055f1]/20"
                     value={grain} onChange={e => setGrain(e.target.value as Grain)}>
@@ -1157,14 +1183,14 @@ export function OutdoorHoursPage() {
               <option value="daily">Day</option>
             </select>
           </label>
-          <label className="flex flex-col gap-1.5 min-w-[320px] flex-1">
+          <label data-track="view-metric" className="flex flex-col gap-1.5 min-w-[320px] flex-1">
             <span className="text-xs font-bold uppercase tracking-wider text-[#6b7388]">Tell me about…</span>
             <select className="text-base font-semibold px-4 py-3 border border-[#e3e6ef] rounded-lg bg-white text-[#121726] cursor-pointer hover:border-[#c9cedb] focus:outline-none focus:border-[#4055f1] focus:ring-2 focus:ring-[#4055f1]/20"
                     value={metricKey} onChange={e => setMetricKey(e.target.value)}>
               {payload.metrics.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
             </select>
           </label>
-          <label className="flex flex-col gap-1.5 justify-end" title={grain === 'yearly' ? 'Year-over-year only meaningful with monthly or daily grain' : 'One line per year for the first selected county'}>
+          <label data-track="view-yoy" className="flex flex-col gap-1.5 justify-end" title={grain === 'yearly' ? 'Year-over-year only meaningful with monthly or daily grain' : 'One line per year for the first selected county'}>
             <span className="text-xs font-bold uppercase tracking-wider text-[#6b7388]">Year-over-year</span>
             <button
               type="button"
@@ -1186,7 +1212,7 @@ export function OutdoorHoursPage() {
               const active = regionsOn.has(r);
               const isExperimental = info && !info.default_on;
               return (
-                <button key={r} type="button" onClick={() => toggleRegion(r)}
+                <button key={r} type="button" data-track={`region-${r}`} onClick={() => toggleRegion(r)}
                         className={`inline-flex items-center gap-2 px-4 py-2 border-2 rounded-full text-sm font-semibold cursor-pointer transition-all select-none ${
                           active ? 'bg-white text-[#121726]' : 'bg-white text-[#6b7388] hover:border-[#c9cedb]'
                         }`}
@@ -1647,6 +1673,7 @@ function ProfileRulesStrip({ rule, onCustomize }: { rule: ProfileRule; onCustomi
         ))}
         <button
           type="button"
+          data-track="profile-customize"
           onClick={onCustomize}
           className="ml-auto px-3 py-1.5 rounded-md text-sm font-bold bg-[#7c3aed] text-white shadow-sm hover:bg-[#6d28d9]"
         >
@@ -2107,10 +2134,10 @@ function DetailPanel({ stack, onDrillTo, onClose, onRowDrill, fullscreen, setFul
           <span className="text-sm text-[#6b7388]">Drill by {metricLabel.toLowerCase()} · {metricUnit} where applicable</span>
         </div>
         <div className="flex gap-2 flex-shrink-0">
-          <button className="text-sm font-semibold px-4 py-2 border border-[#e3e6ef] rounded-lg bg-white text-[#39415a] hover:bg-[#f4f5fa] hover:border-[#c9cedb]" onClick={() => setFullscreen(f => !f)}>
+          <button data-track="detail-fullscreen" className="text-sm font-semibold px-4 py-2 border border-[#e3e6ef] rounded-lg bg-white text-[#39415a] hover:bg-[#f4f5fa] hover:border-[#c9cedb]" onClick={() => setFullscreen(f => !f)}>
             {fullscreen ? '⤡ Exit full screen' : '⤢ Full screen'}
           </button>
-          <button className="text-sm font-semibold px-4 py-2 border border-[#e3e6ef] rounded-lg bg-white text-[#39415a] hover:bg-[#f4f5fa] hover:border-[#c9cedb]" onClick={onClose}>×</button>
+          <button data-track="detail-close" className="text-sm font-semibold px-4 py-2 border border-[#e3e6ef] rounded-lg bg-white text-[#39415a] hover:bg-[#f4f5fa] hover:border-[#c9cedb]" onClick={onClose}>×</button>
         </div>
       </div>
 
