@@ -767,7 +767,7 @@ export function OutdoorHoursPage() {
   // ── Quick Take ──
   const takeawayHtml = useMemo(() => {
     if (!payload || !meta || leaderboard.length < 2) {
-      return `<em>${meta?.label ?? 'Measurement'}</em> shown for ${leaderboard.length ? leaderboard[0].label : 'no counties'}. Toggle another county below to compare.`;
+      return `<em>${meta?.label ?? 'Measurement'}</em> shown for ${leaderboard.length ? leaderboard[0].label : 'no counties'}. Toggle another county in “Compare counties” above to compare.`;
     }
     const leader = leaderboard[0];
     const trailer = leaderboard[leaderboard.length - 1];
@@ -1126,67 +1126,8 @@ export function OutdoorHoursPage() {
         </div>
       )}
 
-      {/* Hero */}
-      <header className="max-w-[1320px] mx-auto px-7 pt-12 pb-4">
-        <div className="inline-flex items-center gap-3 px-4 py-2 bg-white border border-[#e3e6ef] rounded-full text-sm font-semibold text-[#39415a] shadow-sm">
-          {registryOrder(payload).filter(r => payload.region_registry?.[r]?.default_on).map((r, i, arr) => (
-            <span key={r} className="inline-flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full" style={{ background: registryColor(payload, r, i), boxShadow: `0 0 0 4px ${registryColor(payload, r, i)}33` }} />
-              {registryLabel(payload, r)}
-              {i < arr.length - 1 && <span className="text-[#6b7388] font-medium ml-1">vs.</span>}
-            </span>
-          ))}
-        </div>
-        <h1 className="display-hero mt-6 text-[clamp(56px,8vw,132px)] tracking-tight leading-[0.95]">
-          Where is the weather <span className="accent-em">actually</span> better?
-        </h1>
-        <p className="mt-4 max-w-[760px] text-xl leading-snug text-[#39415a]">
-          We counted every hour of the <strong className="text-[#121726]">{rangeBadge.toLowerCase()}</strong> and asked one simple question — <em className="text-[#121726]">was it comfortable to be outside?</em>
-          Flip the time range, toggle counties to compare, click any dot to drop down to the days and hours behind it.
-        </p>
-        {payload.pubdate && (
-          <p className="mt-2 text-xs uppercase tracking-wider font-bold text-[#6b7388]">
-            Data updated {new Date(payload.pubdate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
-          </p>
-        )}
-
-        {/* Leaderboard stats */}
-        <div className="flex gap-4 mt-8 flex-wrap">
-          {leaderboard.map((r, i) => (
-            <div key={r.region} className={`px-5 py-4 bg-white border border-[#e3e6ef] rounded-xl shadow-sm min-w-[180px] border-t-[3px] ${hasDirection && i === 0 && leaderboard.length >= 2 ? 'bg-gradient-to-b from-white to-[#fff8d8]' : ''}`}
-                 style={{ borderTopColor: r.color }}>
-              <div className="text-3xl font-extrabold tabular-nums text-[#121726] leading-tight">{fmtValue(r.value, meta.unit)}</div>
-              <div className="text-xs uppercase tracking-wider font-bold mt-1" style={{ color: r.color }}>
-                {r.label.replace(/\s*County/, '')}{hasDirection && i === 0 && leaderboard.length >= 2 ? ' ★' : ''}
-              </div>
-            </div>
-          ))}
-          <div className="px-5 py-4 bg-gradient-to-b from-[#f7f8fb] to-[#eef1f8] border border-[#e3e6ef] rounded-xl shadow-sm min-w-[130px]">
-            <div className="text-3xl font-extrabold tabular-nums text-[#121726] leading-tight">{rangeBadge}</div>
-            <div className="text-xs uppercase tracking-wider font-bold mt-1 text-[#6b7388]">Time range</div>
-          </div>
-        </div>
-
-        {/* Quick Take */}
-        <div className="mt-6 p-5 bg-gradient-to-br from-white to-[#fafbff] border border-[#e3e6ef] border-l-[6px] border-l-[#4055f1] rounded-xl shadow-md max-w-[1020px] text-xl leading-snug text-[#121726]">
-          <span className="inline-block mr-3 px-3 py-1 rounded-full bg-[#4055f1] text-white text-xs font-bold uppercase tracking-widest align-middle">Quick take</span>
-          <span dangerouslySetInnerHTML={{ __html: takeawayHtml }} />
-          {auxHtml && <div className="mt-3 text-base text-[#39415a]" dangerouslySetInnerHTML={{ __html: auxHtml }} />}
-        </div>
-
-        {payload.summaries?.range_overview?.[tag] && (
-          <div className="mt-3 p-4 bg-gradient-to-br from-[#fffbea] to-[#fff4d0] border border-[#f0dd95] border-l-[6px] border-l-[#d97706] rounded-xl shadow-sm max-w-[1020px] text-base leading-relaxed text-[#3c2f0a]">
-            <span className="inline-block mr-3 px-3 py-1 rounded-full bg-[#d97706] text-white text-[11px] font-bold uppercase tracking-widest align-middle">KOUT·7 writer</span>
-            {payload.summaries.range_overview[tag]}
-          </div>
-        )}
-
-        {/* County Leaderboard — ranked by good-for-outdoors hours */}
-        <Leaderboard payload={payload} grain={grain} tag={tag} profileId={profileId} customResults={customResults} />
-      </header>
-
       {/* Controls — sticky on scroll so range/grain/metric stay reachable while exploring deep dive */}
-      <section className="max-w-[1320px] mx-auto mt-7 px-5 py-4 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 border border-[#e3e6ef] rounded-xl shadow-sm flex flex-col gap-3 relative sticky top-0 z-30">
+      <section className="max-w-[1320px] mx-auto mt-4 px-5 py-4 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 border border-[#e3e6ef] rounded-xl shadow-sm flex flex-col gap-3 relative sticky top-0 z-30">
         <span className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l bg-gradient-to-b from-[#e45c3a] to-[#0e8f74]" />
 
         <div className="flex gap-4 items-end flex-wrap">
@@ -1264,6 +1205,65 @@ export function OutdoorHoursPage() {
           <span className="ml-auto text-sm font-medium text-[#6b7388]">Tip: click a dot — or a row — to drill deeper.</span>
         </div>
       </section>
+
+      {/* Hero */}
+      <header className="max-w-[1320px] mx-auto px-7 pt-12 pb-4">
+        <div className="inline-flex items-center gap-3 px-4 py-2 bg-white border border-[#e3e6ef] rounded-full text-sm font-semibold text-[#39415a] shadow-sm">
+          {registryOrder(payload).filter(r => payload.region_registry?.[r]?.default_on).map((r, i, arr) => (
+            <span key={r} className="inline-flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full" style={{ background: registryColor(payload, r, i), boxShadow: `0 0 0 4px ${registryColor(payload, r, i)}33` }} />
+              {registryLabel(payload, r)}
+              {i < arr.length - 1 && <span className="text-[#6b7388] font-medium ml-1">vs.</span>}
+            </span>
+          ))}
+        </div>
+        <h1 className="display-hero mt-6 text-[clamp(56px,8vw,132px)] tracking-tight leading-[0.95]">
+          Where is the weather <span className="accent-em">actually</span> better?
+        </h1>
+        <p className="mt-4 max-w-[760px] text-xl leading-snug text-[#39415a]">
+          We counted every hour of the <strong className="text-[#121726]">{rangeBadge.toLowerCase()}</strong> and asked one simple question — <em className="text-[#121726]">was it comfortable to be outside?</em>
+          Flip the time range, toggle counties to compare, click any dot to drop down to the days and hours behind it.
+        </p>
+        {payload.pubdate && (
+          <p className="mt-2 text-xs uppercase tracking-wider font-bold text-[#6b7388]">
+            Data updated {new Date(payload.pubdate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+          </p>
+        )}
+
+        {/* Leaderboard stats */}
+        <div className="flex gap-4 mt-8 flex-wrap">
+          {leaderboard.map((r, i) => (
+            <div key={r.region} className={`px-5 py-4 bg-white border border-[#e3e6ef] rounded-xl shadow-sm min-w-[180px] border-t-[3px] ${hasDirection && i === 0 && leaderboard.length >= 2 ? 'bg-gradient-to-b from-white to-[#fff8d8]' : ''}`}
+                 style={{ borderTopColor: r.color }}>
+              <div className="text-3xl font-extrabold tabular-nums text-[#121726] leading-tight">{fmtValue(r.value, meta.unit)}</div>
+              <div className="text-xs uppercase tracking-wider font-bold mt-1" style={{ color: r.color }}>
+                {r.label.replace(/\s*County/, '')}{hasDirection && i === 0 && leaderboard.length >= 2 ? ' ★' : ''}
+              </div>
+            </div>
+          ))}
+          <div className="px-5 py-4 bg-gradient-to-b from-[#f7f8fb] to-[#eef1f8] border border-[#e3e6ef] rounded-xl shadow-sm min-w-[130px]">
+            <div className="text-3xl font-extrabold tabular-nums text-[#121726] leading-tight">{rangeBadge}</div>
+            <div className="text-xs uppercase tracking-wider font-bold mt-1 text-[#6b7388]">Time range</div>
+          </div>
+        </div>
+
+        {/* Quick Take */}
+        <div className="mt-6 p-5 bg-gradient-to-br from-white to-[#fafbff] border border-[#e3e6ef] border-l-[6px] border-l-[#4055f1] rounded-xl shadow-md max-w-[1020px] text-xl leading-snug text-[#121726]">
+          <span className="inline-block mr-3 px-3 py-1 rounded-full bg-[#4055f1] text-white text-xs font-bold uppercase tracking-widest align-middle">Quick take</span>
+          <span dangerouslySetInnerHTML={{ __html: takeawayHtml }} />
+          {auxHtml && <div className="mt-3 text-base text-[#39415a]" dangerouslySetInnerHTML={{ __html: auxHtml }} />}
+        </div>
+
+        {payload.summaries?.range_overview?.[tag] && (
+          <div className="mt-3 p-4 bg-gradient-to-br from-[#fffbea] to-[#fff4d0] border border-[#f0dd95] border-l-[6px] border-l-[#d97706] rounded-xl shadow-sm max-w-[1020px] text-base leading-relaxed text-[#3c2f0a]">
+            <span className="inline-block mr-3 px-3 py-1 rounded-full bg-[#d97706] text-white text-[11px] font-bold uppercase tracking-widest align-middle">KOUT·7 writer</span>
+            {payload.summaries.range_overview[tag]}
+          </div>
+        )}
+
+        {/* County Leaderboard — ranked by good-for-outdoors hours */}
+        <Leaderboard payload={payload} grain={grain} tag={tag} profileId={profileId} customResults={customResults} />
+      </header>
 
       {/* Rules card — dynamic per active profile */}
       {(() => {
@@ -2046,7 +2046,7 @@ function Leaderboard({ payload, grain, tag, profileId, customResults }: Leaderbo
         </table>
       </div>
       <footer className="px-6 py-2.5 text-[12px] text-[#6b7388] border-t border-[#e3e6ef] bg-[#fafbff]">
-        Ranking changes with the selected time range. Toggle counties in &ldquo;Compare counties&rdquo; below to show/hide them on the chart.
+        Ranking changes with the selected time range. Toggle counties in &ldquo;Compare counties&rdquo; above to show/hide them on the chart.
       </footer>
     </div>
   );
