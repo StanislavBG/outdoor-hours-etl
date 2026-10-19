@@ -54,3 +54,10 @@
 ## 2026-10-09 (3:00 PM PDT) — re-verification (job 08 final pass)
 
 Nothing re-run; pipeline state re-checked in /home/bilko/Projects/Weather: `etl.sync --check` -> `no gaps` (rc 0); `crontab -l` has exactly one `weather-weekly-refresh` line; `last_status.json` ok=true published=true (2:47 PM PDT); `etl.health` HEALTHY; https://bilko.run/outdoor-hours/last1m.json pubdate `2026-10-09T21:45:42+00:00` (matches Bilko publish commit `2776c53`; Bilko HEAD has since advanced with unrelated commits). Stray empty file `<path>` remains untracked in the live checkout root (harmless).
+
+## 2026-10-18 (7:43 PM PDT) — web/ merge published live (job 33)
+
+- **Merge:** the Vite + React frontend from the old Outdoor-Hours repo now lives in `web/` (`85aee18`), followed by `scripts/publish_web.sh` / `verify_web_live.sh` (`353c11a`) and the view/rules/controls/telemetry commits (through `417f14e`).
+- **Publish:** `bash /home/bilko/Projects/Weather/scripts/publish_web.sh` rc=0; `logs/publish_web/last_status.json` ok=true published=true at 7:42 PM PDT. Asset `index-BDyZ7jKe.js` (css `index-CLiWMfWr.css`). Bilko commit `f11543f6` (`OutdoorHours: publish web 417f14e`) on origin/main and content-grade/master. Weather sha `417f14e` pushed to origin/main. Live after 14 polls.
+- **verify_web_live:** passes for `'Last 30 days' 'profile-customize' 'outdoor-hours'`; live bundle is byte-identical to Bilko's built asset.
+- **Script fix:** `verify_web_live.sh` gave a false `MISSING` because `printf | grep -q` under `pipefail` fails on SIGPIPE for a large bundle. It now uses a here-string.

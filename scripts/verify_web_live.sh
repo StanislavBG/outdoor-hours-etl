@@ -33,7 +33,7 @@ fi
 js=$(fetch "$BASE$asset") || { echo "HALT: cannot fetch $BASE$asset"; exit 1; }
 
 for s in "$@"; do
-    if ! printf '%s' "$js" | grep -qF -- "$s"; then
+    if ! grep -qF -- "$s" <<<"$js"; then
         echo "MISSING: $s"
         exit 1
     fi
