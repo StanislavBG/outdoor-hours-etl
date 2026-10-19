@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      host-kit:
+        specifier: ^0.9.0
+        version: 0.9.0(react@18.3.1)
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -636,6 +639,17 @@ packages:
 
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
+
+  host-kit@0.9.0:
+    resolution: {integrity: sha512-OizpEwChytaaMU+POY+gz4VjnfyRJX0v76vfUXQ/0mBY+Q2xC5B0jBOZMkDD+rYdH722ReLKbLmW+gC7duGoKw==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
+    peerDependencies:
+      '@playwright/test': '>=1.40'
+      react: ^18.0.0
+    peerDependenciesMeta:
+      '@playwright/test':
+        optional: true
 
   jiti@2.6.1:
     resolution: {integrity: sha512-ekilCSN1jwRvIbgeg/57YFh8qQDNbwDb9xT/qu2DAHbFFZUicIl4ygVaAvzveMhMVr3LnpSKTNnwt8PoOfmKhQ==}
@@ -1341,6 +1355,10 @@ snapshots:
   gensync@1.0.0-beta.2: {}
 
   graceful-fs@4.2.11: {}
+
+  host-kit@0.9.0(react@18.3.1):
+    dependencies:
+      react: 18.3.1
 
   jiti@2.6.1: {}
 
