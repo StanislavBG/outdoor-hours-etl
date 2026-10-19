@@ -16,7 +16,8 @@ etl.sync -> etl.curate -> etl.precompute -> scripts/derive_short_ranges.py
 2. `etl.curate` builds `hourly_last10y.parquet`; `etl.precompute` writes daily/monthly/yearly and region rollups.
 3. `derive_short_ranges` derives last1m / last1y / last5y subsets.
 4. `export_outdoor_hours` writes JSON bundles into the Bilko repo (`/home/bilko/Projects/Bilko/public/outdoor-hours`).
-5. Publishing commits only that directory, pushes Bilko to `origin` and `content-grade` (`master`); Render auto-deploys on push to bilko.run.
+5. `web/` is the Vite + React page that reads the exported JSON (`pnpm --dir web build`).
+6. Publishing commits only that directory, pushes Bilko to `origin` and `content-grade` (`master`); Render auto-deploys on push to bilko.run.
 
 `data/` is gitignored and exists only in this checkout.
 

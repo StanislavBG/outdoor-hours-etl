@@ -10,6 +10,11 @@ Multi-zone ERA5 weather + CAMS air-quality tracker, published to bilko.run (Outd
 - Health: `uv run python -m etl.health`
 - Tests: `uv run pytest -q`
 
+## Frontend (web/)
+- `web/` is the bilko.run page source (Vite + React); all UI work happens here, not in the old ~/Projects/Outdoor-Hours repo.
+- `pnpm --dir web install` / `pnpm --dir web dev` / `pnpm --dir web build` (from repo root).
+- `base` in `web/vite.config.ts` must stay `/projects/outdoor-hours/`.
+
 ## Rules
 - Add zones ONLY via `etl.add_region`; never hand-edit Python or regions.yaml to add one.
 - `data/` is gitignored and lives only in /home/bilko/Projects/Weather; never expect it in a worktree or clone.
