@@ -13,6 +13,8 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { ruleItems, ruleSummary } from './lib/rules.js';
+import type { ProfileRule, RuleKey } from './lib/rules.js';
 import { DEFAULT_VIEW, RANGE_ORDER, rangeLongLabel, readInitialView, viewToParams } from './lib/view.js';
 
 declare global { interface Window { Plotly?: any; } }
@@ -21,7 +23,6 @@ type Grain = 'yearly' | 'monthly' | 'daily';
 type RegionKey = string;
 
 interface MetricMeta { key: string; label: string; unit: string; kind: 'sum' | 'mean' | 'max' | 'pct'; profile_aware?: boolean; }
-interface ProfileRule { temp_min_c: number; temp_max_c: number; temp_min_f: number; temp_max_f: number; uv_max: number; rain_max_mm_h: number; cloud_max_pct: number | null; humidity_max_pct: number | null; aqi_max: number | null; }
 interface Profile { id: string; name: string; label: string; desc: string; rule: ProfileRule; }
 const CUSTOM_PROFILE_ID = 'custom';
 // Default custom rule = mid-permissive (matches Goldilocks exactly so first-tweak is intuitive).
@@ -1082,7 +1083,7 @@ export function OutdoorHoursPage() {
                     key={p.id}
                     type="button"
                     onClick={() => setProfileId(p.id)}
-                    title={p.desc}
+                    title={`${p.desc} — ${ruleSummary(p.rule)}`}
                     className={`px-3 py-1.5 rounded-md text-sm font-bold transition-colors ${active ? 'bg-[#121726] text-white shadow-sm' : 'text-[#39415a] hover:bg-white'}`}
                   >
                     {p.label}
@@ -1105,7 +1106,7 @@ export function OutdoorHoursPage() {
                 : payload.profiles.find(p => p.id === profileId)?.desc}
             </span>
           </div>
-          {profileId === CUSTOM_PROFILE_ID && (
+          {profileId === CUSTOM_PROFILE_ID ? (
             <CustomProfileDrawer
               rule={customRule}
               onChange={setCustomRule}
@@ -1113,7 +1114,15 @@ export function OutdoorHoursPage() {
               stale={customStale}
               onRecompute={recomputeCustom}
             />
-          )}
+          ) : (() => {
+            const activeP = activeProfile(payload, profileId);
+            return activeP && (
+              <ProfileRulesStrip
+                rule={activeP.rule}
+                onCustomize={() => { setCustomRule({ ...activeP.rule }); setProfileId(CUSTOM_PROFILE_ID); }}
+              />
+            );
+          })()}
         </div>
       )}
 
@@ -1263,15 +1272,7 @@ export function OutdoorHoursPage() {
         const rule: ProfileRule = isCustom ? customRule : (activeP?.rule ?? payload.rule);
         const labelOverride = isCustom ? '✨ Custom' : activeP?.label;
         const descOverride = isCustom ? 'Your tuned thresholds — adjust the sliders at the top of the page.' : activeP?.desc;
-        const cards: { color: string; bg: string; ink: string; icon: string; name: string; val: string; sub: string }[] = [
-          { color: '#f5b041', bg: '#fff6e0', ink: '#8a5b0e', icon: '☀', name: 'Daytime',          val: 'Sun is up',                                              sub: "Nighttime hours don’t count." },
-          { color: '#e85d3e', bg: '#fdeee8', ink: '#a8311a', icon: '🌡', name: 'Comfortable temp', val: `${rule.temp_min_f}°–${rule.temp_max_f}°F`,            sub: `That’s ${rule.temp_min_c}°–${rule.temp_max_c}°C.` },
-          { color: '#9b59b6', bg: '#f4ecf7', ink: '#6d2d85', icon: '⛅', name: 'Safe UV',          val: `Index ≤ ${rule.uv_max}`,                            sub: 'Above that and dermatologists say cover up.' },
-          { color: '#3498db', bg: '#eaf2f9', ink: '#1f5a82', icon: '☂', name: 'Not raining',      val: `≤ ${rule.rain_max_mm_h} mm/hr`,                     sub: "Light drizzle is OK — a downpour isn’t." },
-        ];
-        if (rule.cloud_max_pct != null)    cards.push({ color: '#7f8c8d', bg: '#eef0f2', ink: '#4a5557', icon: '☁', name: 'Not overcast', val: `Cloud ≤ ${rule.cloud_max_pct}%`,    sub: "Socked-in skies kill the vibe even when it’s warm." });
-        if (rule.humidity_max_pct != null) cards.push({ color: '#16a085', bg: '#e6f4f1', ink: '#0e6655', icon: '💧', name: 'Not muggy',    val: `Humidity ≤ ${rule.humidity_max_pct}%`, sub: "Above this, sweat can’t evaporate and the air feels heavy." });
-        if (rule.aqi_max != null)          cards.push({ color: '#dc2626', bg: '#fdecec', ink: '#991b1b', icon: '🌫', name: 'Clean air',    val: `US AQI ≤ ${rule.aqi_max}`,           sub: "Pre-Aug-2022 hours don’t fail this rule (no AQ data)." });
+        const cards = ruleItems(rule, { includeUnlimited: false }).map(it => ({ ...it, ...RULE_STYLE[it.key] }));
         const n = cards.length;
         return (
           <section className="max-w-[1320px] mx-auto mt-5 px-7 pt-6 pb-7 bg-gradient-to-b from-[#fffcf3] to-[#fdf6e0] border border-[#f0e6c6] rounded-xl shadow-sm text-[#3c2f0a]">
@@ -1292,7 +1293,7 @@ export function OutdoorHoursPage() {
                 <li key={`r-${i}`} className="p-[18px] bg-white border border-[#f0e6c6] rounded-2xl shadow-sm flex flex-col gap-1.5 border-t-4 min-h-[180px]" style={{ borderTopColor: c.color }}>
                   <div className="w-[52px] h-[52px] rounded-xl inline-flex items-center justify-center text-[28px] leading-none" style={{ background: c.bg, color: c.ink }}>{c.icon}</div>
                   <div className="text-[11px] font-bold uppercase tracking-[0.1em] mt-1" style={{ color: c.color }}>{c.name}</div>
-                  <div className="text-[22px] font-extrabold text-[#1a150a] leading-tight tracking-tight">{c.val}</div>
+                  <div className="text-[22px] font-extrabold text-[#1a150a] leading-tight tracking-tight">{c.value}</div>
                   <div className="text-[13.5px] text-[#6e5e2c] leading-snug mt-0.5">{c.sub}</div>
                 </li>
               ))}
@@ -1610,6 +1611,47 @@ function Tutorial({ onClose }: TutorialProps) {
             </button>
           )}
         </footer>
+      </div>
+    </div>
+  );
+}
+
+const RULE_STYLE: Record<RuleKey, { color: string; bg: string; ink: string }> = {
+  daytime:  { color: '#f5b041', bg: '#fff6e0', ink: '#8a5b0e' },
+  temp:     { color: '#e85d3e', bg: '#fdeee8', ink: '#a8311a' },
+  uv:       { color: '#9b59b6', bg: '#f4ecf7', ink: '#6d2d85' },
+  rain:     { color: '#3498db', bg: '#eaf2f9', ink: '#1f5a82' },
+  cloud:    { color: '#7f8c8d', bg: '#eef0f2', ink: '#4a5557' },
+  humidity: { color: '#16a085', bg: '#e6f4f1', ink: '#0e6655' },
+  aqi:      { color: '#dc2626', bg: '#fdecec', ink: '#991b1b' },
+};
+
+// ── Preset thresholds strip (read-only; mirrors the Custom drawer's spot) ──
+
+function ProfileRulesStrip({ rule, onCustomize }: { rule: ProfileRule; onCustomize: () => void }) {
+  const chips = ruleItems(rule, { includeUnlimited: true }).filter(it => it.key !== 'daytime');
+  return (
+    <div className="bg-gradient-to-b from-[#faf5ff] to-white border-t border-[#e3e6ef]">
+      <div className="max-w-[1320px] mx-auto px-7 py-3 flex items-center gap-2 flex-wrap">
+        {chips.map(it => (
+          <span
+            key={it.key}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-[#e3e6ef] rounded-md text-sm ${it.limited ? '' : 'opacity-60'}`}
+          >
+            <span aria-hidden="true">{it.icon}</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-[#6b7388]">{it.name}</span>
+            <span className="font-semibold text-[#121726]">
+              {it.value}{it.key === 'temp' ? ` (${rule.temp_min_c}°–${rule.temp_max_c}°C)` : ''}
+            </span>
+          </span>
+        ))}
+        <button
+          type="button"
+          onClick={onCustomize}
+          className="ml-auto px-3 py-1.5 rounded-md text-sm font-bold bg-[#7c3aed] text-white shadow-sm hover:bg-[#6d28d9]"
+        >
+          ✨ Customize from this preset
+        </button>
       </div>
     </div>
   );
