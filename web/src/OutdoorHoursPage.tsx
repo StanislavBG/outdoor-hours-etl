@@ -13,6 +13,7 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { DEFAULT_VIEW, RANGE_ORDER, rangeLongLabel, readInitialView, viewToParams } from './lib/view.js';
 
 declare global { interface Window { Plotly?: any; } }
 
@@ -58,16 +59,6 @@ interface HourlyMonth { month: string; rows: HourlyRow[]; }
 // Default palette (colorblind-safe, Wong-esque) used as fallback if a region
 // key arrives without a registry entry.
 const FALLBACK_PALETTE = ['#e45c3a', '#0e8f74', '#8e54c4', '#cc8a1a', '#3b82f6', '#db2777', '#16a34a', '#64748b'];
-
-const RANGE_ORDER: { tag: string; label: string }[] = [
-  { tag: 'last30y', label: '30 yrs' },
-  { tag: 'last10y', label: '10 yrs' },
-  { tag: 'last5y',  label: '5 yrs' },
-  { tag: 'last3y',  label: '3 yrs' },
-  { tag: 'last1y',  label: '1 yr' },
-  { tag: 'last1m',  label: '1 mo' },
-];
-const DEFAULT_TAG = 'last1m';
 
 const PLOTLY_SRC = 'https://cdn.plot.ly/plotly-2.35.2.min.js';
 let plotlyPromise: Promise<void> | null = null;
@@ -385,13 +376,10 @@ interface Crumb { grain: Grain | 'hourly-drill'; bucket: string | number; xLabel
 export function OutdoorHoursPage() {
   // URL ↔ state sync. Sharable views: ?tag=last5y&metric=us_aqi_mean&profile=sun_seeker
   const [searchParams, setSearchParams] = useSearchParams();
+  const initialView = readInitialView(k => searchParams.get(k));
   const initial = {
-    tag: searchParams.get('tag') || DEFAULT_TAG,
-    grain: (searchParams.get('grain') as Grain) || 'daily',
-    metric: searchParams.get('metric') || 'stay_outside_hours',
-    profile: searchParams.get('profile') || 'goldilocks',
-    regions: searchParams.get('regions')?.split(',').filter(Boolean) ?? null,
-    yoy: searchParams.get('yoy') === '1',
+    ...initialView,
+    grain: initialView.grain as Grain,
     customRule: parseCustomRuleParam(searchParams.get('cr')),
   };
 
@@ -432,16 +420,14 @@ export function OutdoorHoursPage() {
   }, []);
   // True until regionsOn has been seeded from URL or default_on registry — prevents
   // the initial empty Set from being written back to the URL as `regions=`.
+  const profileSeeded = useRef<boolean>(false);
   const regionsSeeded = useRef<boolean>(initial.regions !== null);
 
   // Push state → URL whenever any sharable state changes.
   useEffect(() => {
     const next = new URLSearchParams();
-    if (tag !== DEFAULT_TAG) next.set('tag', tag);
-    if (grain !== 'daily') next.set('grain', grain);
-    if (metricKey !== 'stay_outside_hours') next.set('metric', metricKey);
-    if (profileId !== 'goldilocks') next.set('profile', profileId);
-    if (yoy) next.set('yoy', '1');
+    const viewDefaults = { ...DEFAULT_VIEW, profile: payload?.default_profile ?? DEFAULT_VIEW.profile };
+    for (const [k, v] of Object.entries(viewToParams({ tag, grain, metric: metricKey, profile: profileId, yoy }, viewDefaults))) next.set(k, v);
     if (profileId === CUSTOM_PROFILE_ID) {
       const cr = encodeCustomRuleParam(customRule);
       if (cr !== encodeCustomRuleParam(DEFAULT_CUSTOM_RULE)) next.set('cr', cr);
@@ -476,6 +462,10 @@ export function OutdoorHoursPage() {
         payloadCache.current[tag] = p;
         if (cancelled) return;
         setPayload(p);
+        if (!profileSeeded.current) {
+          profileSeeded.current = true;
+          if (!initial.profileFromUrl && p.default_profile) setProfileId(p.default_profile);
+        }
         // First time: seed regionsOn from registry default_on (unless URL pre-seeded).
         if (!regionsSeeded.current && !regionsOn.size) {
           const on = new Set<string>(
@@ -813,7 +803,7 @@ export function OutdoorHoursPage() {
   if (error) return <div className="p-8 text-red-600">Failed to load: {error}</div>;
   if (loading || !payload || !meta) return <div className="p-8 text-slate-500">Loading the weather data…</div>;
 
-  const rangeBadge = RANGE_ORDER.find(r => r.tag === tag)?.label ?? tag;
+  const rangeBadge = rangeLongLabel(tag);
 
   const nextStepFor = (detailGrain: 'hourly' | 'daily' | 'monthly', rawX: string | number): { grain: Grain | 'hourly-drill'; bucket: string | number; label: string } | null => {
     if (detailGrain === 'daily') {
@@ -1142,7 +1132,7 @@ export function OutdoorHoursPage() {
           Where is the weather <span className="accent-em">actually</span> better?
         </h1>
         <p className="mt-4 max-w-[760px] text-xl leading-snug text-[#39415a]">
-          We counted every hour of the last <strong className="text-[#121726]">{rangeBadge}</strong> and asked one simple question — <em className="text-[#121726]">was it comfortable to be outside?</em>
+          We counted every hour of the <strong className="text-[#121726]">{rangeBadge.toLowerCase()}</strong> and asked one simple question — <em className="text-[#121726]">was it comfortable to be outside?</em>
           Flip the time range, toggle counties to compare, click any dot to drop down to the days and hours behind it.
         </p>
         {payload.pubdate && (
@@ -1391,7 +1381,7 @@ export function OutdoorHoursPage() {
       <section className="max-w-[1320px] mx-auto mt-5 mb-8 px-8 py-7 bg-white border border-[#e3e6ef] rounded-xl shadow-sm text-[#39415a] text-base">
         <h3 className="text-xl font-bold text-[#121726] mb-3 tracking-tight">How to read the chart</h3>
         <ul className="list-disc pl-6 space-y-2 leading-relaxed">
-          <li><strong className="text-[#121726]">Each dot is a block of time</strong> — a year, month, or day depending on what you picked above. Change the <strong>Time range</strong> to zoom out 1, 5, 10 or 30 years.</li>
+          <li><strong className="text-[#121726]">Each dot is a block of time</strong> — a year, month, or day depending on what you picked above. Change the <strong>Time range</strong> to zoom out from 30 days to 1, 5, 10 or 30 years.</li>
           <li><strong className="text-[#121726]">Toggle counties</strong> in the Compare Counties row to layer more regions on the same chart. The drill-in table adapts — one column group per visible region.</li>
           <li>Every chart dot is clickable. From the table you can keep going — <strong className="text-[#121726]">monthly → daily → hourly</strong> — and breadcrumbs let you walk back up.</li>
         </ul>
@@ -1527,7 +1517,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
       <>
         <p>The <strong>Controls bar</strong> (sticky as you scroll) sets:</p>
         <ul className="mt-2 ml-5 list-disc space-y-0.5">
-          <li><strong>Time range</strong> — 1mo / 1yr / 5yr / 10yr</li>
+          <li><strong>Time range</strong> — 30 days / 1 yr / 5 yrs / 10 yrs</li>
           <li><strong>Show by</strong> — Year / Month / Day</li>
           <li><strong>Tell me about…</strong> — pick any of 17 metrics</li>
           <li><strong>📅 YoY</strong> — fold the chart into one line per year (great for spotting seasonal trends)</li>
@@ -1748,7 +1738,7 @@ function RegionDeepDive({ payload, tag, grain, profileId, plotlyReady, customRes
     if (!allRegions.includes(focus) && allRegions.length) setFocus(allRegions[0]);
   }, [allRegions, focus]);
 
-  const rangeLabel = RANGE_ORDER.find(r => r.tag === tag)?.label ?? tag;
+  const rangeLabel = rangeLongLabel(tag);
   const focusLabel = registryLabel(payload, focus);
 
   const toggleOverlay = (r: string) => {
@@ -1913,7 +1903,7 @@ function MiniMetricChart({ payload, grain, metric, focus, overlays, profileId, a
 interface LeaderboardProps { payload: Payload; grain: Grain; tag: string; profileId: string; customResults: CustomResults | null; }
 
 function Leaderboard({ payload, grain, tag, profileId, customResults }: LeaderboardProps) {
-  const rangeLabel = RANGE_ORDER.find(r => r.tag === tag)?.label ?? tag;
+  const rangeLabel = rangeLongLabel(tag);
 
   const rows = useMemo(() => {
     const grainData = payload.grains[grain];
