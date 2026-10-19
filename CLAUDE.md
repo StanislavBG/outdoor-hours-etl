@@ -6,6 +6,7 @@ Multi-zone ERA5 weather + CAMS air-quality tracker, published to bilko.run (Outd
 - Add a zone: `uv run python -m etl.add_region --region-id miami_fl --label "Miami, FL" --short MIA --place "Miami, Florida, United States"` (`--dry-run`, `--no-backfill`, `--publish`, `--point 'id|Name|lat|lon[|elev|tz]'`)
 - Fill gaps: `uv run python -m etl.sync [--dry-run|--check] [--max-requests N]`
 - Weekly refresh + publish: `bash scripts/weekly_refresh.sh` (`SKIP_PUBLISH=1` to skip publishing)
+- Publish web UI: `bash scripts/publish_web.sh` (`SKIP_PUBLISH=1` to build only); check live: `bash scripts/verify_web_live.sh '<text>'`
 - Install cron: `bash scripts/install_cron.sh`
 - Health: `uv run python -m etl.health`
 - Tests: `uv run pytest -q`
